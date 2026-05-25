@@ -14,7 +14,6 @@ enum class TestResult : uint8_t {
 enum class TestState : uint8_t {
     T0_WELCOME = 0,
     T1_EPD,
-    T2_LED,
     T3_BUTTON,
     T4_CODEC,
     T5_DMIC,
@@ -56,7 +55,6 @@ private:
     // ── Per-test run methods ─────────────────────────────────────────────────
     void runT0();
     void runT1();
-    void runT2();
     void runT3();
     void runT4();
     void runT5();

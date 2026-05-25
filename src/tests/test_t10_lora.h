@@ -63,6 +63,11 @@ static void _t10_write_reg(uint16_t addr, uint8_t value) {
 inline TestResult runTestT10(Display& disp, TestRunner& runner) {
     T10_LOG("START");
 
+    // Enable LoRa module.
+    pinMode(PIN_LORA_EN, OUTPUT);
+    digitalWrite(PIN_LORA_EN, HIGH);
+    delay(10);  // allow module to power up
+
     pinMode(PIN_LORA_NSS, OUTPUT);
     pinMode(PIN_LORA_RST, OUTPUT);
     pinMode(PIN_LORA_BUSY, INPUT);
@@ -147,5 +152,9 @@ inline TestResult runTestT10(Display& disp, TestRunner& runner) {
 
     bool verdict = runner.waitForVerdict();
     T10_LOG("END auto=%s op=%s", pass ? "PASS" : "FAIL", verdict ? "PASS" : "FAIL");
+
+    // Disable LoRa module when done.
+    digitalWrite(PIN_LORA_EN, LOW);
+
     return (pass && verdict) ? TestResult::PASS : TestResult::FAIL;
 }

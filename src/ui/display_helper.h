@@ -122,6 +122,9 @@ public:
                        pass ? "PASS" : "FAIL", prompt);
     }
 
+    // ── Hibernate EPD (retains image, minimises power draw) ──────────────────
+    void hibernate() { _epd.hibernate(); }
+
     // ── Raw access ────────────────────────────────────────────────────────────
     EpdDisplay& raw() { return _epd; }
 

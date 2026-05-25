@@ -170,6 +170,12 @@ static void _t4_i2s_deinit() {
 
 inline TestResult runTestT4(Display& disp, TestRunner& runner) {
     T4_LOG("START");
+
+    // Enable ES8311 codec chip.
+    pinMode(PIN_CODEC_EN, OUTPUT);
+    digitalWrite(PIN_CODEC_EN, HIGH);
+    delay(10);  // allow codec to power up before I2C probe
+
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
     T4_LOG("Wire.begin SDA=%d SCL=%d", PIN_I2C_SDA, PIN_I2C_SCL);
 
@@ -343,6 +349,10 @@ inline TestResult runTestT4(Display& disp, TestRunner& runner) {
     digitalWrite(PIN_PA_CTRL, LOW);
     _t4_i2s_deinit();
     _es8311_enter_powerdown();
+
+    // Disable ES8311 codec chip.
+    digitalWrite(PIN_CODEC_EN, LOW);
+
     T4_LOG("END verdict=%s", verdict ? "PASS" : "FAIL");
     return verdict ? TestResult::PASS : TestResult::FAIL;
 }

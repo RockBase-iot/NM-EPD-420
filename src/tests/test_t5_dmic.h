@@ -277,6 +277,11 @@ static void _t5_i2s_deinit_tx() {
 inline TestResult runTestT5(Display& disp, TestRunner& runner) {
     T5_LOG("START");
 
+    // Enable ES8311 codec chip (T4 disabled it at the end of its test).
+    pinMode(PIN_CODEC_EN, OUTPUT);
+    digitalWrite(PIN_CODEC_EN, HIGH);
+    delay(10);  // allow codec to power up before I2C probe
+
     pinMode(PIN_PA_CTRL, OUTPUT);
     digitalWrite(PIN_PA_CTRL, LOW);
 
@@ -511,6 +516,10 @@ inline TestResult runTestT5(Display& disp, TestRunner& runner) {
 
     free(monoBuf);
     T5_LOG("END verdict=PASS attempts=%u", (unsigned)attempt);
+
+    // Disable ES8311 codec chip.
+    digitalWrite(PIN_CODEC_EN, LOW);
+
     return TestResult::PASS;
 }
 

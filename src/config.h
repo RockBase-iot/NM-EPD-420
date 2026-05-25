@@ -11,7 +11,7 @@
                           //   a GPIO here — GPIO10 is used by the peripheral
                           //   HSPI bus (SD MOSI), and any overlap leaves the
                           //   FSPI bus in a bad state after SD operations.
-#define PIN_EPD_CS    3
+#define PIN_EPD_CS   46
 #define PIN_EPD_DC    4
 #define PIN_EPD_RST   5
 #define PIN_EPD_BUSY  6
@@ -45,10 +45,15 @@
 #define PIN_PA_CTRL   41   // External amplifier enable (HIGH = on)
 #define PIN_BOOT_BTN   0   // BOOT key, external pull-up, pressed = LOW (RTC GPIO)
 #define PIN_USER_BTN  45   // USER key, external pull-up, pressed = LOW
-#define PIN_LED       47   // WS2812 data pin (RMT / NeoPixel driver)
 
-// ─── WS2812 ──────────────────────────────────────────────────────────────────
-#define WS2812_COUNT  1    // Number of onboard WS2812 LEDs
+// ─── Module enable pins (active HIGH) ────────────────────────────────────────
+#define PIN_LORA_EN   47   // LoRa module power enable (HIGH = on)
+#define PIN_CODEC_EN  44   // ES8311 codec power enable (HIGH = on)
+#define PIN_ADC_EN    43   // Battery ADC circuit enable (HIGH = on)
+
+// ─── Battery voltage ADC ─────────────────────────────────────────────────────
+#define PIN_BATT_ADC   3   // Battery voltage sense input (via resistor divider)
+#define BATT_ADC_DIV   2   // Divider ratio: ADC_mV * BATT_ADC_DIV = battery mV
 
 // ─── EPD refresh tuning ─────────────────────────────────────────────────────
 // Full-height page buffer reduces paged transfer overhead on ESP32-S3.
@@ -58,7 +63,7 @@
 #define EPD_FAST_FULL_UPDATE      1     // 1 = use fast full-refresh waveform
 
 // ─── Feature switches ─────────────────────────────────────────────────────────
-#define BATTERY_ADC_AVAILABLE  0   // 0 = SKIP (HW not populated), 1 = test
+#define BATTERY_ADC_AVAILABLE  1   // 1 = test (IO3 + enable IO43)
 
 // ─── DMIC recording thresholds ────────────────────────────────────────────────
 #define DMIC_RMS_THRESHOLD_VOICE     150   // Phase-1: operator voice

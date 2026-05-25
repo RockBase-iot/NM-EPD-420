@@ -1,6 +1,8 @@
 #include "test_runner.h"
 #include "config.h"
 #include "spi_buses.h"
+#include <esp_sleep.h>
+#include <driver/gpio.h>
 
 // Definition for the second SPI bus (HSPI / SPI3) shared by SD + LoRa.
 // EPD keeps using the default `SPI` global (FSPI / SPI2).
@@ -8,7 +10,6 @@ SPIClass spiPeripheral(HSPI);
 
 // ─── Test implementations (header-only stubs) ─────────────────────────────────
 #include "tests/test_t1_epd.h"
-#include "tests/test_t2_led.h"
 #include "tests/test_t3_button.h"
 #include "tests/test_t4_codec.h"
 #include "tests/test_t5_dmic.h"
@@ -131,6 +132,54 @@ void TestRunner::runT0() {
     Serial.println("[FACTORY TEST] T0 PASS - Starting test sequence");
 }
 
+// ─── Deep sleep with GPIO hold ────────────────────────────────────────────────
+// Ensures all module/peripheral enables are LOW (or SPI CS HIGH) and latches
+// the pin states so they are maintained while the IO power domain is off
+// during deep sleep. Mirrors the pattern used in the ESP32-Dashboard BSP for
+// this same board (nm_display_420/Board.cpp).
+
+static void _enterDeepSleep() {
+    Serial.println("[FACTORY TEST] Powering off all modules...");
+
+    // ── Force all enables off ──────────────────────────────────────────────
+    // Drive every module-enable and peripheral pin to its "off" state before
+    // latching, so there is no ambiguity about what level is held.
+    pinMode(PIN_PA_CTRL,  OUTPUT); digitalWrite(PIN_PA_CTRL,  LOW);  // PA amp off
+    pinMode(PIN_LORA_EN,  OUTPUT); digitalWrite(PIN_LORA_EN,  LOW);  // LoRa off
+    pinMode(PIN_CODEC_EN, OUTPUT); digitalWrite(PIN_CODEC_EN, LOW);  // ES8311 off
+    pinMode(PIN_ADC_EN,   OUTPUT); digitalWrite(PIN_ADC_EN,   LOW);  // Batt ADC off
+    pinMode(PIN_TEMP_CTL, OUTPUT); digitalWrite(PIN_TEMP_CTL, LOW);  // AHT20 off
+    pinMode(PIN_LORA_RST, OUTPUT); digitalWrite(PIN_LORA_RST, LOW);  // LoRa in reset
+    pinMode(PIN_LORA_NSS, OUTPUT); digitalWrite(PIN_LORA_NSS, HIGH); // SPI CS idle HIGH
+
+    delay(10);  // let GPIO outputs settle
+
+    // ── Latch pin states ───────────────────────────────────────────────────
+    // gpio_hold_en() captures the current output level and keeps it driven
+    // even when the CPU is off. gpio_deep_sleep_hold_en() extends this hold
+    // across the deep-sleep power domain transition on ESP32-S3.
+    gpio_hold_en((gpio_num_t)PIN_PA_CTRL);
+    gpio_hold_en((gpio_num_t)PIN_LORA_EN);
+    gpio_hold_en((gpio_num_t)PIN_CODEC_EN);
+    gpio_hold_en((gpio_num_t)PIN_ADC_EN);
+    gpio_hold_en((gpio_num_t)PIN_TEMP_CTL);
+    gpio_hold_en((gpio_num_t)PIN_LORA_RST);
+    gpio_hold_en((gpio_num_t)PIN_LORA_NSS);
+    gpio_deep_sleep_hold_en();
+
+    Serial.println("[FACTORY TEST] GPIO states latched.");
+    Serial.println("[FACTORY TEST] ESP32 entering deep sleep now.");
+    Serial.println("[FACTORY TEST] Press BOOT button to wake up.");
+    Serial.println("========================================");
+    Serial.flush();
+
+    // BOOT button (IO0 = RTC GPIO) wakes deep sleep — allows re-running
+    // the test sequence by pressing BOOT followed by a power cycle.
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0);
+    esp_deep_sleep_start();
+    // Never reached.
+}
+
 // ─── T11 — Summary ────────────────────────────────────────────────────────────
 
 void TestRunner::runT11() {
@@ -138,7 +187,6 @@ void TestRunner::runT11() {
     struct TestMeta { uint8_t num; const char* name; };
     static const TestMeta META[] = {
         { 1,  "EPD Display"    },
-        { 2,  "WS2812 RGB LED" },
         { 3,  "Buttons"        },
         { 4,  "ES8311 CODEC"   },
         { 5,  "DMIC Mic"       },
@@ -148,18 +196,19 @@ void TestRunner::runT11() {
         { 9,  "SD Card R/W"    },
         { 10, "LoRa SPI Bus"   },
     };
+    constexpr uint8_t kTests = sizeof(META) / sizeof(META[0]);
 
     // Build display lines. Block is centered horizontally; rows are
     // left-aligned within the block (tabular look).
-    char lineBuf[10][36];
-    const char* lines[10];
+    char lineBuf[kTests][36];
+    const char* lines[kTests];
 
     bool anyFail = false;
     char failList[64] = "";
 
-    for (uint8_t i = 0; i < 10; i++) {
+    for (uint8_t i = 0; i < kTests; i++) {
         uint8_t num = META[i].num;
-        TestResult r = _results[i];
+        TestResult r = _results[num - 1];  // keyed by test number, not array position
         const char* tag = (r == TestResult::PASS) ? "PASS" :
                           (r == TestResult::SKIP) ? "SKIP" : "FAIL";
         // Mono font: "T<num>  <name>........[TAG]" — pad name with dots to
@@ -184,15 +233,15 @@ void TestRunner::runT11() {
     const char* summary = anyFail ? "FAIL" : "PASS";
 
     _display.showTestScreen(11, "Factory Test Summary",
-                            lines, 10,
-                            summary, nullptr,
+                            lines, kTests,
+                            summary, "Device entering deep sleep...",
                             /*linesLeftAlignedBlock=*/true,
                             /*monospaceStartLine=*/0);
 
     // Serial output
     Serial.println("========================================");
     Serial.println("[FACTORY TEST] ===== SUMMARY =====");
-    for (uint8_t i = 0; i < 10; i++) {
+    for (uint8_t i = 0; i < kTests; i++) {
         Serial.print  ("[FACTORY TEST] ");
         Serial.println(lines[i]);
     }
@@ -205,8 +254,12 @@ void TestRunner::runT11() {
     }
     Serial.println("========================================");
 
-    // Halt — wait for power cycle
-    while (true) { delay(1000); }
+    // Hibernate the EPD panel so it retains the summary image at minimum power.
+    _display.hibernate();
+
+    // Power off all peripherals and enter ESP32 deep sleep.
+    // GPIO states are latched so module enable pins remain LOW during sleep.
+    _enterDeepSleep();
 }
 
 // ─── Serial log helper ───────────────────────────────────────────────────────
@@ -236,13 +289,6 @@ void TestRunner::runT1()  {
     TestResult r = runTestT1(_display, *this);
     storeResult(1, r);
     logTestEnd(1, "EPD Display", r);
-}
-void TestRunner::runT2()  {
-    _preTest();
-    logTestStart(2,  "WS2812 RGB LED");
-    TestResult r = runTestT2(_display, *this);
-    storeResult(2, r);
-    logTestEnd(2, "WS2812 RGB LED", r);
 }
 void TestRunner::runT3()  {
     _preTest();
@@ -309,8 +355,7 @@ void TestRunner::run() {
 
     while (_state != TestState::DONE) {
         switch (_state) {
-            case TestState::T1_EPD:     runT1();  _state = TestState::T2_LED;     break;
-            case TestState::T2_LED:     runT2();  _state = TestState::T3_BUTTON;  break;
+            case TestState::T1_EPD:     runT1();  _state = TestState::T3_BUTTON;  break;
             case TestState::T3_BUTTON:  runT3();  _state = TestState::T4_CODEC;    break;
             case TestState::T4_CODEC:   runT4();  _state = TestState::T5_DMIC;     break;
             case TestState::T5_DMIC:    runT5();  _state = TestState::T6_AHT20;    break;
