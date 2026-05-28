@@ -1,5 +1,5 @@
 #pragma once
-// Two independent SPI buses for the NM-Display-420 board.
+// Two independent SPI buses for the NM-EPD-420 board.
 //
 //   SPI            (default, FSPI/SPI2): EPD only
 //                   pins SCK=2, MOSI=1, MISO=10, CS=3 (init in Display::init)

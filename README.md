@@ -1,4 +1,4 @@
-# NM-Display-420
+# NM-EPD-420
 
 ESP32-S3 based 4.2-inch E-ink display board — **factory test firmware**.
 
@@ -226,8 +226,8 @@ pio device monitor --baud 115200                           # serial console
 
 Or one-shot via VS Code tasks:
 
-* **Build (nm-display-420)**
-* **Upload (nm-display-420)**
+* **Build (nm-epd-420)**
+* **Upload (nm-epd-420)**
 
 The first build downloads the ESP-IDF toolchain (~hundreds of MB) into
 `%USERPROFILE%\.platformio`. Subsequent builds take ~25 s.
@@ -235,7 +235,7 @@ The first build downloads the ESP-IDF toolchain (~hundreds of MB) into
 Serial output during a run:
 
 ```
-[FACTORY TEST] Board: NM Display 4.2 Inch
+[FACTORY TEST] Board: NM-EPD-420
 [FACTORY TEST] FW: v1.3.10
 [FACTORY TEST] T0 - System startup OK
 …
@@ -295,7 +295,7 @@ After porting:
 ## 8. Repository layout
 
 ```
-NM-Display-420/
+NM-EPD-420/
 ├── README.md            ← this file
 ├── README_cn.md         ← 中文版
 ├── platformio.ini

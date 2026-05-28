@@ -1,4 +1,4 @@
-# NM-Display-420
+# NM-EPD-420
 
 基于 ESP32-S3 的 4.2 英寸三色墨水屏开发板 —— **产线工厂测试固件**。
 
@@ -215,8 +215,8 @@ pio device monitor --baud 115200                           # 串口
 
 或使用 VS Code 任务：
 
-* **Build (nm-display-420)**
-* **Upload (nm-display-420)**
+* **Build (nm-epd-420)**
+* **Upload (nm-epd-420)**
 
 首次编译会下载 ESP-IDF 工具链（数百 MB）到 `%USERPROFILE%\.platformio`，
 后续编译约 25 秒。
@@ -224,7 +224,7 @@ pio device monitor --baud 115200                           # 串口
 测试运行时串口典型输出：
 
 ```
-[FACTORY TEST] Board: NM Display 4.2 Inch
+[FACTORY TEST] Board: NM-EPD-420
 [FACTORY TEST] FW: v1.3.10
 [FACTORY TEST] T0 - System startup OK
 …
@@ -279,7 +279,7 @@ pio device monitor --baud 115200                           # 串口
 ## 8. 仓库目录
 
 ```
-NM-Display-420/
+NM-EPD-420/
 ├── README.md            ← 英文版
 ├── README_cn.md         ← 本文件
 ├── platformio.ini
