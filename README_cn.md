@@ -29,16 +29,15 @@
 |------|-------------------|-----------------------------------------------|------|
 | T0   | 系统启动          | 串口/EPD 初始化、欢迎页、等待 USER 按键         | ![T0](image/T0.png) |
 | T1   | EPD 屏显          | 全白/全黑/全红 + 文本渲染示例                 | — |
-| T2   | WS2812 RGB LED    | 红 → 绿 → 蓝 → 白循环                         | ![T2](image/T2.png) |
 | T3   | 按键              | USER 与 BOOT 按键检测                           | — |
 | T4   | ES8311 编解码     | 500/1k/2k/3k Hz 扫频 + 《欢乐颂》旋律         | ![T4](image/T4.png) |
-| T5   | DMIC 麦克         | 录音 + 喇叭回环 + RMS 阈值                    | ![T5](image/T5.png) |
+| T5   | DMIC 麦克         | 录音 + 喙叭回环 + RMS 阀值                    | ![T5](image/T5.png) |
 | T6   | AHT20 温湿度      | I²C 读取温湿度                                | ![T6](image/T6.png) |
-| T7   | 电池 ADC          | 电池分压采样（未贴件时 SKIP）                 | — |
+| T7   | 电池 ADC          | IO3 采样电池分压（IO43 使能）                  | — |
 | T8   | Wi-Fi 扫描        | 2.4 GHz AP 扫描，期望 ≥ 1 个网络              | ![T8](image/T8.png) |
 | T9   | SD 卡读写         | FSPI 挂载 + 写入再回读校验                    | ![T9](image/T9.png) |
 | T10  | LoRa SPI 总线     | 复位 LoRa，检查 BUSY 拉低                     | — |
-| T11  | 汇总              | 各项 PASS/FAIL/SKIP 表 + 总判定               | ![T11](image/T11.png) |
+| T11  | 汇总              | 各项 PASS/FAIL/SKIP 表 + EPD 休眠 + 深度睡眠       | ![T11](image/T11.png) |
 
 完整一轮测试约 3 分钟，主要时间花在墨水屏的全刷上（三色屏每张约 10 秒）。
 
@@ -63,7 +62,7 @@
                              │
                              ▼
                   ┌───────────────────────────┐
-                  │  T11  汇总页              │  停机；重新上电以再测一次
+                  │  T11  汇总页              │  EPD 休眠 → ESP32 深度睡眠
                   └───────────────────────────┘
 ```
 
@@ -89,10 +88,10 @@
               │  400×300 4.2"│    │  modem   │            │        │ ← DMIC LMD4737
               └──────────────┘    └──────────┘            └────────┘
 
-  ┌────────┐  ┌────────┐  ┌────────┐  ┌──────────────┐
-  │  USER  │  │  BOOT  │  │ WS2812 │  │  电池 ADC    │
-  │ 按键   │  │ 按键   │  │  LED   │  │  （选配）    │
-  └────────┘  └────────┘  └────────┘  └──────────────┘
+  ┌────────┐  ┌────────┐  ┌────────────┐
+  │  USER  │  │  BOOT  │  │  电池 ADC  │
+  │ 按键   │  │ 按键   │  │ IO43+IO3  │
+  └────────┘  └────────┘  └────────────┘
 ```
 
 ### 4.2 主要器件清单
@@ -104,7 +103,6 @@
 | 编解码       | **ES8311**                    | I²C 0x18 + I²S  | DAC → 外部功放 → 8 Ω 喇叭          |
 | 麦克         | **LMD4737** PDM DMIC          | I²S (DMIC 模式) | 采样率 16 kHz                      |
 | 温湿度       | **AHT20**                     | I²C 0x38        | 通过 `PIN_TEMP_CTL` 上电使能       |
-| RGB LED      | **WS2812**                    | RMT             | 单颗                               |
 | SD 卡        | µSD                           | SPI (HSPI)      | 与 LoRa 共享总线                   |
 | LoRa 模组    | **SX126x** 系列               | SPI (HSPI)      | CS / RST / BUSY 引脚               |
 | 按键         | USER, BOOT                      | GPIO            | 低有效，外部上拉                   |
@@ -117,7 +115,7 @@
 | EPD (FSPI)      | SCK              | 2    | OUT  |                                           |
 |                 | MOSI             | 1    | OUT  |                                           |
 |                 | MISO             | —    | —    | 屏端 NC（只写）                           |
-|                 | CS               | 3    | OUT  |                                           |
+|                 | CS               | 46   | OUT  |                                           |
 |                 | DC               | 4    | OUT  |                                           |
 |                 | RST              | 5    | OUT  |                                           |
 |                 | BUSY             | 6    | IN   | 刷新过程中为 HIGH                         |
@@ -140,7 +138,10 @@
 | 音频            | PA_CTRL          | 41   | OUT  | 外部功放使能                              |
 | 用户 I/O        | USER 按键        | 45   | IN   | 低有效，外部上拉                          |
 |                 | BOOT 按键        | 0    | IN   | 低有效，RTC GPIO，外部上拉                |
-|                 | WS2812 数据      | 47   | OUT  | RMT                                       |
+| 模块使能        | LoRa EN          | 47   | OUT  | LoRa 模块上电使能（HIGH 使能）           |
+|                 | Codec EN         | 44   | OUT  | ES8311 上电使能（HIGH 使能）             |
+|                 | ADC EN           | 43   | OUT  | 电池 ADC 电路使能（HIGH 使能）           |
+| 电池 ADC       | BATT_ADC         | 3    | IN   | 电池分压采样输入                          |
 
 > 引脚定义以代码为准：[src/config.h](src/config.h)
 
@@ -158,7 +159,6 @@ src/
 │   └── display_helper.h  ← EPD 包装类 + showWelcome / showTestScreen
 └── tests/
     ├── test_t1_epd.h     ← 各测试项 header-only 实现
-    ├── test_t2_led.h
     ├── …
     └── test_t10_lora.h
 ```
@@ -193,7 +193,6 @@ src/
 | `adafruit/Adafruit AHTX0`          | 2.0.5   | T6 温湿度  |
 | `adafruit/Adafruit BusIO`          | 1.17.4  | 间接依赖   |
 | `adafruit/Adafruit Unified Sensor` | 1.1.15  | 间接依赖   |
-| `adafruit/Adafruit NeoPixel`       | 1.12.3  | T2 LED     |
 | `SPI`, `Wire`, `WiFi`, `SD`        | 3.2.1   | 自带       |
 | `Adafruit GFX Library`             | 1.12.6  | 间接依赖   |
 
@@ -235,7 +234,6 @@ pio device monitor --baud 115200                           # 串口
 …
 [FACTORY TEST] ===== SUMMARY =====
 [FACTORY TEST] T1   EPD Display    [PASS]
-[FACTORY TEST] T2   WS2812 RGB LED [PASS]
 …
 [FACTORY TEST] Overall: FACTORY_TEST=OK
 ```

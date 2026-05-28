@@ -36,16 +36,15 @@ summary screen lists every test as PASS / FAIL / SKIP.
 |------|-----------------|----------------------------------------------|--------|
 | T0   | System startup  | Serial / EPD init, welcome screen, wait USER | ![T0](image/T0.png) |
 | T1   | EPD display     | White / Black / Red fill + text demo         | — |
-| T2   | WS2812 RGB LED  | RED → GREEN → BLUE → WHITE cycle             | ![T2](image/T2.png) |
 | T3   | Buttons         | USER key and BOOT key press detection          | — |
 | T4   | ES8311 codec    | Sweep 500/1k/2k/3k Hz + *Ode to Joy* melody  | ![T4](image/T4.png) |
 | T5   | DMIC mic        | Voice record + speaker loopback + RMS check  | ![T5](image/T5.png) |
 | T6   | AHT20 sensor    | Temperature & humidity over I²C              | ![T6](image/T6.png) |
-| T7   | Battery ADC     | Battery divider voltage (SKIP if not fitted) | — |
+| T7   | Battery ADC     | Battery divider voltage on IO3 (enable IO43) | — |
 | T8   | Wi-Fi scan      | 2.4 GHz AP scan, expect ≥ 1 network          | ![T8](image/T8.png) |
 | T9   | SD card R/W     | FSPI mount + write / read-back verify        | ![T9](image/T9.png) |
 | T10  | LoRa SPI bus    | Reset modem, check BUSY low                  | — |
-| T11  | Summary         | Per-item PASS/FAIL/SKIP table + verdict      | ![T11](image/T11.png) |
+| T11  | Summary         | Per-item PASS/FAIL/SKIP table + deep sleep   | ![T11](image/T11.png) |
 
 A complete run typically takes ~3 min, dominated by EPD full-refresh time
 (~10 s per page on a 3-color panel).
@@ -71,7 +70,7 @@ A complete run typically takes ~3 min, dominated by EPD full-refresh time
                              │
                              ▼
                   ┌───────────────────────────┐
-                  │  T11  Summary             │  halt; power-cycle to retest
+                  │  T11  Summary             │  EPD hibernate → ESP32 deep sleep
                   └───────────────────────────┘
 ```
 
@@ -97,10 +96,10 @@ press during a refresh cannot be consumed as a verdict for the next test.
               │  400×300 4.2"│    │  modem   │            │        │ ← DMIC LMD4737
               └──────────────┘    └──────────┘            └────────┘
 
-  ┌────────┐  ┌────────┐  ┌────────┐  ┌──────────────┐
-  │  USER  │  │  BOOT  │  │ WS2812 │  │ Battery ADC  │
-  │ button │  │ button │  │  LED   │  │  (optional)  │
-  └────────┘  └────────┘  └────────┘  └──────────────┘
+  ┌────────┐  ┌────────┐  ┌──────────────┐
+  │  USER  │  │  BOOT  │  │ Battery ADC  │
+  │ button │  │ button │  │  IO43+IO3    │
+  └────────┘  └────────┘  └──────────────┘
 ```
 
 ### 4.2 Bill of components
@@ -112,7 +111,6 @@ press during a refresh cannot be consumed as a verdict for the next test.
 | Codec        | **ES8311**                    | I²C 0x18 + I²S  | DAC out → external PA → 8 Ω SPK    |
 | Mic          | **LMD4737** PDM DMIC          | I²S (DMIC mode) | Sample rate 16 kHz                 |
 | T/RH sensor  | **AHT20**                     | I²C 0x38        | Power-gated via `PIN_TEMP_CTL`     |
-| RGB LED      | **WS2812**                    | RMT             | 1 pixel                            |
 | SD card      | µSD                           | SPI (HSPI)      | Shared bus with LoRa               |
 | LoRa modem   | **SX126x** family             | SPI (HSPI)      | CS / RST / BUSY GPIOs              |
 | Buttons      | USER, BOOT                      | GPIO            | Active LOW, external pull-up       |
@@ -125,7 +123,7 @@ press during a refresh cannot be consumed as a verdict for the next test.
 | EPD (FSPI)   | SCK              | 2    | OUT       |                                         |
 |              | MOSI             | 1    | OUT       |                                         |
 |              | MISO             | —    | —         | Panel pin NC (write-only)               |
-|              | CS               | 3    | OUT       |                                         |
+|              | CS               | 46   | OUT       |                                         |
 |              | DC               | 4    | OUT       |                                         |
 |              | RST              | 5    | OUT       |                                         |
 |              | BUSY             | 6    | IN        | HIGH while refresh in progress          |
@@ -146,9 +144,12 @@ press during a refresh cannot be consumed as a verdict for the next test.
 |              | SCL              | 38   | OUT       |                                         |
 |              | TEMP_CTL         | 40   | OUT       | AHT20 power gate (HIGH = on)            |
 | Audio        | PA_CTRL          | 41   | OUT       | External amplifier enable               |
-| User I/O     | USER button        | 45   | IN        | Active LOW, external pull-up            |
+| User I/O     | USER button      | 45   | IN        | Active LOW, external pull-up            |
 |              | BOOT button      | 0    | IN        | Active LOW, RTC GPIO, external pull-up  |
-|              | WS2812 data      | 47   | OUT       | RMT                                     |
+| Module EN    | LoRa EN          | 47   | OUT       | LoRa module power enable (HIGH = on)    |
+|              | Codec EN         | 44   | OUT       | ES8311 power enable (HIGH = on)         |
+|              | ADC EN           | 43   | OUT       | Battery ADC circuit enable (HIGH = on)  |
+| Battery ADC  | BATT_ADC         | 3    | IN        | Battery voltage sense (resistor divider)|
 
 > Authoritative source: [src/config.h](src/config.h)
 
@@ -166,7 +167,6 @@ src/
 │   └── display_helper.h  ← EPD wrapper + showWelcome / showTestScreen
 └── tests/
     ├── test_t1_epd.h     ← header-only test implementations
-    ├── test_t2_led.h
     ├── …
     └── test_t10_lora.h
 ```
@@ -203,7 +203,6 @@ Library deps (see [platformio.ini](platformio.ini)):
 | `adafruit/Adafruit AHTX0`          | 2.0.5   | T6 sensor |
 | `adafruit/Adafruit BusIO`          | 1.17.4  | (dep)     |
 | `adafruit/Adafruit Unified Sensor` | 1.1.15  | (dep)     |
-| `adafruit/Adafruit NeoPixel`       | 1.12.3  | T2 LED    |
 | `SPI`, `Wire`, `WiFi`, `SD`        | 3.2.1   | bundled   |
 | `Adafruit GFX Library`             | 1.12.6  | (dep)     |
 
@@ -246,7 +245,6 @@ Serial output during a run:
 …
 [FACTORY TEST] ===== SUMMARY =====
 [FACTORY TEST] T1   EPD Display    [PASS]
-[FACTORY TEST] T2   WS2812 RGB LED [PASS]
 …
 [FACTORY TEST] Overall: FACTORY_TEST=OK
 ```
@@ -304,6 +302,6 @@ NM-Display-420/
 ├── factory_test_plan.md
 ├── docs/                ← misc design notes
 ├── image/               ← screen captures shown in this README
-│   ├── T0.png  T2.png  T4.png  T5.png  T6.png  T8.png  T9.png  T11.png
+│   ├── T0.png  T4.png  T5.png  T6.png  T8.png  T9.png  T11.png
 └── src/                 ← all firmware sources
 ```

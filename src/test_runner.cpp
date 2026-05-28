@@ -213,7 +213,7 @@ void TestRunner::runT11() {
                           (r == TestResult::SKIP) ? "SKIP" : "FAIL";
         // Mono font: "T<num>  <name>........[TAG]" — pad name with dots to
         // a fixed width so [TAG] always lands in the same column.
-        // 14 chars is the longest name ("WS2812 RGB LED").
+        // 14 chars is the longest name ("ES8311 Codec  ").
         snprintf(lineBuf[i], sizeof(lineBuf[i]), "T%-2u  %-14s [%s]",
                  (unsigned)num, META[i].name, tag);
         lines[i] = lineBuf[i];
