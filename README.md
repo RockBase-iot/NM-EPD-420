@@ -112,9 +112,11 @@ press during a refresh cannot be consumed as a verdict for the next test.
 | Mic          | **LMD4737** PDM DMIC          | I²S (DMIC mode) | Sample rate 16 kHz                 |
 | T/RH sensor  | **AHT20**                     | I²C 0x38        | Power-gated via `PIN_TEMP_CTL`     |
 | SD card      | µSD                           | SPI (HSPI)      | Shared bus with LoRa               |
-| LoRa modem   | **SX126x** family             | SPI (HSPI)      | CS / RST / BUSY GPIOs              |
+| LoRa modem   | **SX126x** family (Heltec RA62) | SPI (HSPI)      | CS / RST / BUSY GPIOs              |
 | Buttons      | USER, BOOT                      | GPIO            | Active LOW, external pull-up       |
 | Audio amp    | External Class-D              | EN GPIO         | Enabled by `PIN_PA_CTRL` HIGH      |
+
+*Notes: the HT-RA62 module not the default, you can choose the LoRa module SKU with 9-dBi Antenna for Meshtastic, LoRa mesh networking project.*
 
 ### 4.3 ESP32-S3 GPIO map
 
@@ -305,3 +307,23 @@ NM-EPD-420/
 │   ├── T0.png  T4.png  T5.png  T6.png  T8.png  T9.png  T11.png
 └── src/                 ← all firmware sources
 ```
+
+## 9. Supported Projects
+
+### Already supported Projects
+ 
+ - [Meshtastic](https://github.com/RockBase-iot/meshtastic-firmware/tree/nm-epd-420), with the Heltec HT-RA62 module with NM-EPD-420 board, the meshtastic firmware supports LoRa mesh communication and basic sensor data display on the 4.2" EPD. With the 4.2" EPD on your desk, you can easily check the status of your mesh network and sensor readings without needing to connect to a smartphone or computer. 
+
+ - [ESP32-Dashboard](https://github.com/RockBase-iot/ESP32-Dashboard), an e-paper dashboard running on ESP32-S3 + 4.2" EPD. The current version features a fully functional weather station powered by the free Open-Meteo API — no API key required — showing current conditions, a 5-day forecast, an hourly temperature / precipitation graph, air quality, and indoor sensor data. Support Wi-Fi to configure.
+
+ - [esp32-weather-epd](https://github.com/RockBase-iot/esp32-weather-epd/tree/nm-display-420), A low-power weather station firmware for ESP32 + 4.2" EPD, with AHT20 T/RH sensor support. Weather data is fetched from OpenWeatherMap API, and an onboard sensor provides indoor temperature and humidity. To support 4.2" EPD, make it cheaper and easier to get.
+
+## 10. Where to buy?
+
+The NM-EPD-420 is still under testing, you can get it June 2026. We will publish the product on our website and Aliexpress/Amazon/Shopify, and also on NMTech Stores. Stay tuned!
+
+ - [Amazon RockBase IoT](https://www.amazon.com/gp/product/B0H1QCHMW6)
+ - [RockBase IoT Store](https://www.aliexpress.com/store/1105401362)
+ - [RockBase Shop](https://rockbase.shop)
+ - [NMTech Global Store](https://www.aliexpress.com/store/1104265822)
+ - [NMMiner Website](https://www.nmminer.com)
