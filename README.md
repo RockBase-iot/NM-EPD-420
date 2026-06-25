@@ -14,10 +14,10 @@ summary screen lists every test as PASS / FAIL / SKIP.
 ## 1. What this firmware does
 
 * Boots the board, initialises every peripheral driver
-* Runs 10 hardware tests one after another, blocking between tests for an
-  operator verdict (`USER = OK/PASS`, `BOOT = FAIL`)
-* Renders a dedicated screen for every test on the 3-color (B/W/R) e-paper
-  panel
+* Runs automatic hardware tests as one batch, then shows a single auto-summary
+  screen
+* Groups the manual EPD / button / audio / microphone checks to reduce operator
+  actions and EPD refreshes
 * Plays audio tones and a recognisable melody (Beethoven *Ode to Joy*) through
   the ES8311 codec + onboard speaker
 * Records a short voice clip from the LMD4737 DMIC and computes RMS to verify
@@ -44,7 +44,7 @@ summary screen lists every test as PASS / FAIL / SKIP.
 | T8   | Wi-Fi scan      | 2.4 GHz AP scan, expect ≥ 1 network          | ![T8](image/T8.png) |
 | T9   | SD card R/W     | FSPI mount + write / read-back verify        | ![T9](image/T9.png) |
 | T10  | LoRa SPI bus    | Reset modem, check BUSY low                  | — |
-| T11  | Summary         | Per-item PASS/FAIL/SKIP table + aging prompt | ![T11](image/T11.png) |
+| T11  | Summary         | Per-item PASS/FAIL/SKIP table + deep sleep   | ![T11](image/T11.png) |
 
 A complete run typically takes ~3 min, dominated by EPD full-refresh time
 (~10 s per page on a 3-color panel).
@@ -70,7 +70,7 @@ A complete run typically takes ~3 min, dominated by EPD full-refresh time
                              │
                              ▼
                   ┌───────────────────────────┐
-                  │  T11  Summary             │  USER → EPD aging checkerboard loop
+                  │  T11  Summary             │  EPD hibernate → ESP32 deep sleep
                   └───────────────────────────┘
 ```
 

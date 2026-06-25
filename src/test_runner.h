@@ -65,6 +65,13 @@ private:
     void runT10();
     void runT11();
     void runEpdAgingMode();
+    void runAutoSuite();
+    void runAutoSuiteWithPrompt();
+    void showAutoSummary();
+    void runManualSuite();
+    TestResult runManualEpdVisual();
+    TestResult runManualButtons();
+    TestResult runManualAudioMic();
 
     // Re-sync EPD before each test (recover from peripheral side-effects).
     void _preTest();

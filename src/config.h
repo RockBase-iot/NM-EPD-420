@@ -1,7 +1,7 @@
 #pragma once
 
 // ─── Firmware version ────────────────────────────────────────────────────────
-#define FW_VERSION  "v1.4.03"
+#define FW_VERSION  "v1.4.04"
 #define BOARD_NAME  "NM-EPD-420"
 
 // ─── EPD (SPI0 / VSPI) ───────────────────────────────────────────────────────
@@ -54,6 +54,13 @@
 // ─── Battery voltage ADC ─────────────────────────────────────────────────────
 #define PIN_BATT_ADC   3   // Battery voltage sense input (via resistor divider)
 #define BATT_ADC_DIV   2   // Divider ratio: ADC_mV * BATT_ADC_DIV = battery mV
+#define BATT_MIN_MV    2500
+#define BATT_MAX_MV    4500
+#define BATT_OFF_MAX_MV 300
+#define BATT_ADC_DISCHARGE_MS 100
+#define BATT_ADC_SETTLE_MS     80
+#define BATT_ADC_SAMPLES       24
+#define BATT_ADC_MAX_SPREAD_MV 250
 
 // ─── EPD refresh tuning ─────────────────────────────────────────────────────
 // Full-height page buffer reduces paged transfer overhead on ESP32-S3.

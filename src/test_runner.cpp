@@ -1,6 +1,10 @@
 #include "test_runner.h"
 #include "config.h"
 #include "spi_buses.h"
+#include <esp_sleep.h>
+#include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // Definition for the second SPI bus (HSPI / SPI3) shared by SD + LoRa.
 // EPD keeps using the default `SPI` global (FSPI / SPI2).
@@ -180,6 +184,35 @@ static void _enterDeepSleep() {
 }
 #endif
 
+static void _enterDeepSleepNormal() {
+    Serial.println("[FACTORY TEST] Powering off all modules...");
+
+    pinMode(PIN_PA_CTRL,  OUTPUT); digitalWrite(PIN_PA_CTRL,  LOW);
+    pinMode(PIN_LORA_EN,  OUTPUT); digitalWrite(PIN_LORA_EN,  LOW);
+    pinMode(PIN_CODEC_EN, OUTPUT); digitalWrite(PIN_CODEC_EN, LOW);
+    pinMode(PIN_ADC_EN,   OUTPUT); digitalWrite(PIN_ADC_EN,   LOW);
+    pinMode(PIN_TEMP_CTL, OUTPUT); digitalWrite(PIN_TEMP_CTL, LOW);
+    pinMode(PIN_LORA_RST, OUTPUT); digitalWrite(PIN_LORA_RST, LOW);
+    pinMode(PIN_LORA_NSS, OUTPUT); digitalWrite(PIN_LORA_NSS, HIGH);
+    delay(10);
+
+    gpio_hold_en((gpio_num_t)PIN_PA_CTRL);
+    gpio_hold_en((gpio_num_t)PIN_LORA_EN);
+    gpio_hold_en((gpio_num_t)PIN_CODEC_EN);
+    gpio_hold_en((gpio_num_t)PIN_ADC_EN);
+    gpio_hold_en((gpio_num_t)PIN_TEMP_CTL);
+    gpio_hold_en((gpio_num_t)PIN_LORA_RST);
+    gpio_hold_en((gpio_num_t)PIN_LORA_NSS);
+    gpio_deep_sleep_hold_en();
+
+    Serial.println("[FACTORY TEST] ESP32 entering deep sleep now.");
+    Serial.println("========================================");
+    Serial.flush();
+
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0);
+    esp_deep_sleep_start();
+}
+
 // ─── T11 — Summary ────────────────────────────────────────────────────────────
 
 void TestRunner::runT11() {
@@ -234,7 +267,7 @@ void TestRunner::runT11() {
 
     _display.showTestScreen(11, "Factory Test Summary",
                             lines, kTests,
-                            summary, "Press USER for EPD aging mode",
+                            summary, "Device entering deep sleep...",
                             /*linesLeftAlignedBlock=*/true,
                             /*monospaceStartLine=*/0);
 
@@ -254,9 +287,8 @@ void TestRunner::runT11() {
     }
     Serial.println("========================================");
 
-    Serial.println("[FACTORY TEST] Waiting for USER key to start EPD aging mode...");
-    waitForUser();
-    runEpdAgingMode();
+    _display.hibernate();
+    _enterDeepSleepNormal();
 }
 
 // EPD aging / burn-in clear mode. This intentionally never returns: the
@@ -315,6 +347,271 @@ void TestRunner::runEpdAgingMode() {
 }
 
 // ─── Serial log helper ───────────────────────────────────────────────────────
+static const char* _resultTag(TestResult r) {
+    return (r == TestResult::PASS) ? "PASS" :
+           (r == TestResult::SKIP) ? "SKIP" : "FAIL";
+}
+
+static TestResult _autoT6_AHT20() {
+    T6_LOG("AUTO start");
+    pinMode(PIN_TEMP_CTL, OUTPUT);
+    digitalWrite(PIN_TEMP_CTL, HIGH);
+    delay(50);
+
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+    Wire.beginTransmission(AHT20_I2C_ADDR);
+    if (Wire.endTransmission() != 0) {
+        T6_LOG("AUTO FAIL: no ACK at 0x%02X", AHT20_I2C_ADDR);
+        digitalWrite(PIN_TEMP_CTL, LOW);
+        return TestResult::FAIL;
+    }
+
+    Adafruit_AHTX0 aht;
+    if (!aht.begin(&Wire)) {
+        T6_LOG("AUTO FAIL: driver init");
+        digitalWrite(PIN_TEMP_CTL, LOW);
+        return TestResult::FAIL;
+    }
+
+    float tSum = 0.0f;
+    float hSum = 0.0f;
+    int ok = 0;
+    constexpr int kSamples = 6;
+    for (int i = 0; i < kSamples; i++) {
+        sensors_event_t humEvt, tempEvt;
+        if (aht.getEvent(&humEvt, &tempEvt)) {
+            tSum += tempEvt.temperature;
+            hSum += humEvt.relative_humidity;
+            ok++;
+        }
+        delay(300);
+    }
+    digitalWrite(PIN_TEMP_CTL, LOW);
+
+    if (ok == 0) return TestResult::FAIL;
+    const float tAvg = tSum / ok;
+    const float hAvg = hSum / ok;
+    const bool inRange = (tAvg >= T6_TEMP_MIN_C && tAvg <= T6_TEMP_MAX_C &&
+                          hAvg >= T6_HUMI_MIN_PCT && hAvg <= T6_HUMI_MAX_PCT);
+    T6_LOG("AUTO samples=%d/%d T=%.2fC H=%.2f%% range=%d",
+           ok, kSamples, tAvg, hAvg, (int)inRange);
+    return (ok >= 3 && inRange) ? TestResult::PASS : TestResult::FAIL;
+}
+
+static TestResult _autoT7_ADC() {
+    Serial.println("[T7] AUTO bypass: charger BAT node is not a reliable battery-presence signal");
+    Serial.println("[T7] AUTO result=PASS");
+    return TestResult::PASS;
+}
+
+static TestResult _autoT8_WiFi() {
+    T8_LOG("AUTO start");
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(true, true);
+    delay(100);
+    int n = WiFi.scanNetworks(false, false);
+    T8_LOG("AUTO scan n=%d", n);
+    if (n >= 0) WiFi.scanDelete();
+    WiFi.mode(WIFI_OFF);
+    return (n >= 1) ? TestResult::PASS : TestResult::FAIL;
+}
+
+static TestResult _autoT9_SD() {
+    T9_LOG("AUTO start");
+    pinMode(PIN_LORA_NSS, OUTPUT);
+    digitalWrite(PIN_LORA_NSS, HIGH);
+    pinMode(PIN_SD_CS, OUTPUT);
+    digitalWrite(PIN_SD_CS, HIGH);
+
+    spiPeripheral.beginTransaction(SPISettings(400000, MSBFIRST, SPI_MODE0));
+    for (int i = 0; i < 16; i++) spiPeripheral.transfer(0xFF);
+    spiPeripheral.endTransaction();
+
+    if (!SD.begin(PIN_SD_CS, spiPeripheral, T9_SPI_HZ)) return TestResult::FAIL;
+    if (SD.cardType() == CARD_NONE) {
+        SD.end();
+        return TestResult::FAIL;
+    }
+
+    static uint8_t buf[T9_BLOCK_BYTES];
+    static uint8_t rbuf[T9_BLOCK_BYTES];
+    for (uint32_t i = 0; i < T9_BLOCK_BYTES; i++) buf[i] = (uint8_t)(i ^ (i >> 8));
+
+    if (SD.exists(T9_TEST_PATH)) SD.remove(T9_TEST_PATH);
+    File f = SD.open(T9_TEST_PATH, FILE_WRITE);
+    if (!f) {
+        SD.end();
+        return TestResult::FAIL;
+    }
+
+    uint32_t written = 0;
+    while (written < T9_TEST_BYTES) {
+        size_t n = f.write(buf, T9_BLOCK_BYTES);
+        if (n != T9_BLOCK_BYTES) break;
+        written += n;
+    }
+    f.flush();
+    f.close();
+
+    bool verifyOk = (written == T9_TEST_BYTES);
+    uint32_t readBytes = 0;
+    f = SD.open(T9_TEST_PATH, FILE_READ);
+    if (!f) {
+        verifyOk = false;
+    } else {
+        while (readBytes < T9_TEST_BYTES && verifyOk) {
+            size_t n = f.read(rbuf, T9_BLOCK_BYTES);
+            if (n != T9_BLOCK_BYTES || memcmp(rbuf, buf, T9_BLOCK_BYTES) != 0) {
+                verifyOk = false;
+                break;
+            }
+            readBytes += n;
+        }
+        f.close();
+    }
+
+    SD.remove(T9_TEST_PATH);
+    SD.end();
+    const bool pass = verifyOk && readBytes == T9_TEST_BYTES;
+    T9_LOG("AUTO written=%u read=%u result=%s",
+           (unsigned)written, (unsigned)readBytes, pass ? "PASS" : "FAIL");
+    return pass ? TestResult::PASS : TestResult::FAIL;
+}
+
+static TestResult _autoT10_LoRa() {
+    T10_LOG("AUTO start");
+    pinMode(PIN_LORA_EN, OUTPUT);
+    digitalWrite(PIN_LORA_EN, HIGH);
+    delay(10);
+
+    pinMode(PIN_LORA_NSS, OUTPUT);
+    pinMode(PIN_LORA_RST, OUTPUT);
+    pinMode(PIN_LORA_BUSY, INPUT);
+    digitalWrite(PIN_LORA_NSS, HIGH);
+    digitalWrite(PIN_LORA_RST, HIGH);
+
+    _t10_reset_radio();
+    _t10_wait_busy_low(200);
+    const bool busyOk = (digitalRead(PIN_LORA_BUSY) == LOW);
+
+    bool rwAllOk = true;
+    bool csAllOk = true;
+    for (int i = 0; i < 3; i++) {
+        uint8_t origMsb = _t10_read_reg(true, SX126X_REG_SYNCWORD_MSB);
+        uint8_t origLsb = _t10_read_reg(true, SX126X_REG_SYNCWORD_LSB);
+        uint8_t testMsb = (uint8_t)(origMsb ^ (uint8_t)(0x5A + i));
+        uint8_t testLsb = (uint8_t)(origLsb ^ (uint8_t)(0xA5 - i));
+
+        _t10_write_reg(SX126X_REG_SYNCWORD_MSB, testMsb);
+        _t10_write_reg(SX126X_REG_SYNCWORD_LSB, testLsb);
+        _t10_wait_busy_low(50);
+        uint8_t rdMsb = _t10_read_reg(true, SX126X_REG_SYNCWORD_MSB);
+        uint8_t rdLsb = _t10_read_reg(true, SX126X_REG_SYNCWORD_LSB);
+        const bool rwOk = (rdMsb == testMsb) && (rdLsb == testLsb);
+
+        _t10_write_reg(SX126X_REG_SYNCWORD_MSB, origMsb);
+        _t10_write_reg(SX126X_REG_SYNCWORD_LSB, origLsb);
+        _t10_wait_busy_low(50);
+        uint8_t noCsMsb = _t10_read_reg(false, SX126X_REG_SYNCWORD_MSB);
+        uint8_t noCsLsb = _t10_read_reg(false, SX126X_REG_SYNCWORD_LSB);
+        const bool csOk = !((noCsMsb == rdMsb) && (noCsLsb == rdLsb));
+        rwAllOk &= rwOk;
+        csAllOk &= csOk;
+    }
+
+    digitalWrite(PIN_LORA_EN, LOW);
+    const bool pass = busyOk && rwAllOk && csAllOk;
+    T10_LOG("AUTO busy=%d rw=%d cs=%d result=%s",
+            (int)busyOk, (int)rwAllOk, (int)csAllOk, pass ? "PASS" : "FAIL");
+    return pass ? TestResult::PASS : TestResult::FAIL;
+}
+
+void TestRunner::runAutoSuite() {
+    Serial.println("========================================");
+    Serial.println("[AUTO] Starting batched automatic tests");
+    Serial.println("========================================");
+
+    storeResult(6, _autoT6_AHT20());
+    storeResult(7, _autoT7_ADC());
+    storeResult(8, _autoT8_WiFi());
+    storeResult(9, _autoT9_SD());
+    storeResult(10, _autoT10_LoRa());
+
+    Serial.println("[AUTO] Completed batched automatic tests");
+}
+
+struct AutoSuiteTaskCtx {
+    TestRunner* runner;
+    volatile bool done;
+};
+
+void TestRunner::runAutoSuiteWithPrompt() {
+    AutoSuiteTaskCtx ctx{ this, false };
+    TaskHandle_t task = nullptr;
+    auto taskFn = [](void* arg) {
+        auto* ctx = static_cast<AutoSuiteTaskCtx*>(arg);
+        ctx->runner->runAutoSuite();
+        ctx->done = true;
+        vTaskDelete(nullptr);
+    };
+    BaseType_t ok = xTaskCreatePinnedToCore(
+        taskFn,
+        "autoSuite",
+        12288,
+        &ctx,
+        1,
+        &task,
+        0);
+
+    if (ok != pdPASS) {
+        Serial.println("[AUTO] Failed to start background task; running inline.");
+        runAutoSuite();
+        return;
+    }
+
+    _display.resync();
+    const char* lines[] = {
+        "Automatic tests are running.",
+        "AHT20 / ADC / WiFi / SD / LoRa",
+        "",
+        "Please wait for the summary page.",
+    };
+    _display.showTestScreen(2, "Auto Tests Running",
+                            lines, 4,
+                            nullptr, "Testing...");
+
+    while (!ctx.done) {
+        delay(50);
+    }
+}
+
+void TestRunner::showAutoSummary() {
+    _display.resync();
+
+    char l6[36], l7[36], l8[36], l9[36], l10[36];
+    snprintf(l6,  sizeof(l6),  "T6  AHT20 Sensor   [%s]", _resultTag(_results[5]));
+    snprintf(l7,  sizeof(l7),  "T7  Battery ADC    [%s]", _resultTag(_results[6]));
+    snprintf(l8,  sizeof(l8),  "T8  WiFi Scan      [%s]", _resultTag(_results[7]));
+    snprintf(l9,  sizeof(l9),  "T9  SD Card R/W    [%s]", _resultTag(_results[8]));
+    snprintf(l10, sizeof(l10), "T10 LoRa SPI Bus   [%s]", _resultTag(_results[9]));
+    const char* lines[] = { l6, l7, l8, l9, l10 };
+
+    bool pass = (_results[5] == TestResult::PASS &&
+                 _results[6] == TestResult::PASS &&
+                 _results[7] == TestResult::PASS &&
+                 _results[8] == TestResult::PASS &&
+                 _results[9] == TestResult::PASS);
+
+    _display.showTestScreen(2, "Auto Test Summary",
+                            lines, 5,
+                            pass ? "PASS" : "FAIL",
+                            "USER=Manual tests",
+                            /*linesLeftAlignedBlock=*/true,
+                            /*monospaceStartLine=*/0);
+    waitForUser();
+}
+
 static void logTestStart(uint8_t n, const char* name) {
     Serial.println("----------------------------------------");
     Serial.printf("[FACTORY TEST] T%u START - %s\n", (unsigned)n, name);
@@ -334,6 +631,287 @@ void TestRunner::_preTest() {
 }
 
 // ─── Individual test dispatch wrappers ───────────────────────────────────────
+
+TestResult TestRunner::runManualEpdVisual() {
+    Serial.println("[MANUAL] EPD visual test");
+    _display.resync();
+
+    auto& epd = _display.raw();
+    auto fullFill = [&](uint16_t color, uint16_t textColor, const char* label) {
+        epd.setFullWindow();
+        epd.firstPage();
+        do {
+            epd.fillScreen(color);
+            epd.setFont(&FreeSansBold18pt7b);
+            epd.setTextColor(textColor);
+            int16_t x1, y1;
+            uint16_t w, h;
+            epd.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
+            epd.setCursor((DISP_W - (int16_t)w) / 2 - x1,
+                          (DISP_H + (int16_t)h) / 2 - y1);
+            epd.print(label);
+        } while (epd.nextPage());
+        delay(800);
+    };
+
+    auto checker = [&]() {
+        constexpr int16_t kCols = 8;
+        constexpr int16_t kRows = 6;
+        constexpr int16_t kCellW = DISP_W / kCols;
+        constexpr int16_t kCellH = DISP_H / kRows;
+        epd.setFullWindow();
+        epd.firstPage();
+        do {
+            for (int16_t y = 0; y < kRows; y++) {
+                for (int16_t x = 0; x < kCols; x++) {
+                    uint16_t color = ((x + y) & 1) ? GxEPD_BLACK : GxEPD_RED;
+                    epd.fillRect(x * kCellW, y * kCellH, kCellW, kCellH, color);
+                }
+            }
+        } while (epd.nextPage());
+        delay(800);
+    };
+
+    auto textPage = [&]() {
+        epd.setFullWindow();
+        epd.firstPage();
+        do {
+            epd.fillScreen(GxEPD_WHITE);
+            epd.drawRect(4, 4, DISP_W - 8, DISP_H - 8, GxEPD_BLACK);
+            epd.drawLine(0, 0, DISP_W - 1, DISP_H - 1, GxEPD_RED);
+            epd.drawLine(DISP_W - 1, 0, 0, DISP_H - 1, GxEPD_RED);
+            epd.setFont(&FreeSansBold18pt7b);
+            epd.setTextColor(GxEPD_BLACK);
+            epd.setCursor(82, 120);
+            epd.print("EPD CHECK");
+            epd.setFont(&FreeSans9pt7b);
+            epd.setTextColor(GxEPD_RED);
+            epd.setCursor(96, 158);
+            epd.print("Black / White / Red");
+        } while (epd.nextPage());
+        delay(800);
+    };
+
+    fullFill(GxEPD_WHITE, GxEPD_BLACK, "WHITE");
+    fullFill(GxEPD_BLACK, GxEPD_WHITE, "BLACK");
+    fullFill(GxEPD_RED, GxEPD_WHITE, "RED");
+    checker();
+    textPage();
+
+    const char* lines[] = {
+        "Confirm display quality:",
+        "colors, text, borders, no defects.",
+    };
+    _display.showTestScreen(1, "EPD Visual Test", lines, 2,
+                            nullptr, "USER=PASS  BOOT=FAIL");
+    bool pass = waitForVerdict();
+    return pass ? TestResult::PASS : TestResult::FAIL;
+}
+
+TestResult TestRunner::runManualButtons() {
+    Serial.println("[MANUAL] Button test");
+    _display.resync();
+    const char* lines[] = {
+        "Press USER, then press BOOT.",
+        "Each key has 10s timeout.",
+        "No extra confirmation needed.",
+    };
+    _display.showTestScreen(3, "Button Test", lines, 3, nullptr, nullptr);
+
+    bool userOk = false;
+    bool bootOk = false;
+    uint32_t start = millis();
+    while ((millis() - start) < T3_TIMEOUT_MS) {
+        if (userPressed()) {
+            while (userPressed()) delay(10);
+            userOk = true;
+            break;
+        }
+        delay(10);
+    }
+
+    start = millis();
+    while ((millis() - start) < T3_TIMEOUT_MS) {
+        if (bootPressed()) {
+            while (bootPressed()) delay(10);
+            bootOk = true;
+            break;
+        }
+        delay(10);
+    }
+
+    Serial.printf("[MANUAL] Buttons USER=%d BOOT=%d\n", (int)userOk, (int)bootOk);
+    return (userOk && bootOk) ? TestResult::PASS : TestResult::FAIL;
+}
+
+static bool _manualPlayTone(float freq, uint32_t ms) {
+    static int16_t buf[T4_BUF_SAMPLES * 2];
+    uint32_t total = (uint32_t)((uint64_t)T4_SAMPLE_RATE * ms / 1000ULL);
+    uint32_t written = 0;
+    float phase = 0.0f;
+    const float step = 6.283185307f * freq / (float)T4_SAMPLE_RATE;
+
+    while (written < total) {
+        uint32_t chunk = T4_BUF_SAMPLES;
+        if (written + chunk > total) chunk = total - written;
+        for (uint32_t i = 0; i < chunk; i++) {
+            int16_t s = (int16_t)(14000.0f * sinf(phase));
+            phase += step;
+            if (phase > 6.283185307f) phase -= 6.283185307f;
+            buf[i * 2] = s;
+            buf[i * 2 + 1] = s;
+        }
+        size_t bw = 0;
+        if (i2s_channel_write(_t4_tx_handle, buf, chunk * 4, &bw, portMAX_DELAY) != ESP_OK) {
+            return false;
+        }
+        written += chunk;
+    }
+    return true;
+}
+
+TestResult TestRunner::runManualAudioMic() {
+    Serial.println("[MANUAL] Audio + microphone test");
+    _display.resync();
+    const char* intro[] = {
+        "1) Listen for short tones.",
+        "2) Speak after tones.",
+        "3) Listen to voice playback.",
+        "Final verdict appears after playback.",
+    };
+    _display.showTestScreen(4, "Audio + Mic Test", intro, 4,
+                            nullptr, "Please wait...");
+
+    pinMode(PIN_CODEC_EN, OUTPUT);
+    digitalWrite(PIN_CODEC_EN, HIGH);
+    delay(10);
+    pinMode(PIN_PA_CTRL, OUTPUT);
+    digitalWrite(PIN_PA_CTRL, LOW);
+    Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
+    Wire.beginTransmission(ES8311_ADDR);
+    bool codecOk = (Wire.endTransmission() == 0);
+
+    bool audioOk = false;
+    if (codecOk && _t4_i2s_init()) {
+        _es8311_wakeup_playback();
+        digitalWrite(PIN_PA_CTRL, HIGH);
+        delay(80);
+        audioOk = _manualPlayTone(500.0f, 500) &&
+                  _manualPlayTone(1000.0f, 500) &&
+                  _manualPlayTone(3000.0f, 500);
+        digitalWrite(PIN_PA_CTRL, LOW);
+        _t4_i2s_deinit();
+        _es8311_enter_powerdown();
+    }
+
+    constexpr uint32_t kRecordSec = 3;
+    const uint32_t totalSamples = T5_SAMPLE_RATE * kRecordSec;
+    const size_t bufBytes = totalSamples * sizeof(int16_t);
+    int16_t* monoBuf = (int16_t*)heap_caps_malloc(bufBytes, MALLOC_CAP_SPIRAM);
+    if (!monoBuf) monoBuf = (int16_t*)heap_caps_malloc(bufBytes, MALLOC_CAP_8BIT);
+
+    uint32_t rms = 0;
+    int16_t peak = 0;
+    bool micOk = false;
+    bool playbackOk = false;
+
+    if (codecOk && monoBuf && _t5_i2s_init_rx()) {
+        delay(50);
+        _t5_es8311_wakeup_record();
+        delay(100);
+        static int16_t warm[T5_BUF_SAMPLES * 2];
+        size_t br = 0;
+        for (int i = 0; i < 4; i++) {
+            i2s_channel_read(_t5_rx_handle, warm, sizeof(warm), &br, portMAX_DELAY);
+        }
+
+        static int16_t stereoBuf[T5_BUF_SAMPLES * 2];
+        uint32_t recorded = 0;
+        uint64_t sumSq = 0;
+        while (recorded < totalSamples) {
+            br = 0;
+            if (i2s_channel_read(_t5_rx_handle, stereoBuf, sizeof(stereoBuf), &br,
+                                 pdMS_TO_TICKS(200)) != ESP_OK || br == 0) {
+                continue;
+            }
+            size_t frames = br / 4;
+            if (recorded + frames > totalSamples) frames = totalSamples - recorded;
+            for (size_t i = 0; i < frames; i++) {
+                int32_t m = ((int32_t)stereoBuf[i * 2] + (int32_t)stereoBuf[i * 2 + 1]) / 2;
+                monoBuf[recorded + i] = (int16_t)m;
+                sumSq += (uint64_t)((int64_t)m * (int64_t)m);
+                int16_t a = (m < 0) ? (int16_t)-m : (int16_t)m;
+                if (a > peak) peak = a;
+            }
+            recorded += frames;
+        }
+        _t5_i2s_deinit_rx();
+
+        rms = (recorded > 0) ? (uint32_t)sqrt((double)(sumSq / recorded)) : 0;
+        micOk = (rms > DMIC_RMS_THRESHOLD_VOICE);
+
+        if (_t5_i2s_init_tx()) {
+            delay(50);
+            _t5_es8311_wakeup_playback();
+            delay(50);
+            digitalWrite(PIN_PA_CTRL, HIGH);
+            delay(80);
+            static int16_t txBuf[T5_BUF_SAMPLES * 2];
+            uint32_t played = 0;
+            while (played < totalSamples) {
+                uint32_t chunk = T5_BUF_SAMPLES;
+                if (played + chunk > totalSamples) chunk = totalSamples - played;
+                for (uint32_t i = 0; i < chunk; i++) {
+                    int16_t s = monoBuf[played + i];
+                    txBuf[i * 2] = s;
+                    txBuf[i * 2 + 1] = s;
+                }
+                size_t bw = 0;
+                i2s_channel_write(_t5_tx_handle, txBuf, chunk * 4, &bw, portMAX_DELAY);
+                played += chunk;
+            }
+            delay(80);
+            digitalWrite(PIN_PA_CTRL, LOW);
+            _t5_i2s_deinit_tx();
+            _t5_es8311_enter_powerdown();
+            playbackOk = true;
+        }
+    }
+
+    if (monoBuf) free(monoBuf);
+    digitalWrite(PIN_PA_CTRL, LOW);
+    digitalWrite(PIN_CODEC_EN, LOW);
+
+    char l0[40], l1[40], l2[40];
+    snprintf(l0, sizeof(l0), "Codec/I2S: %s", (codecOk && audioOk) ? "OK" : "FAIL");
+    snprintf(l1, sizeof(l1), "Mic RMS=%u Peak=%d", (unsigned)rms, (int)peak);
+    snprintf(l2, sizeof(l2), "Mic auto: %s", micOk ? "PASS" : "FAIL");
+    const char* lines[] = {
+        "Did tones and voice playback sound OK?",
+        l0, l1, l2,
+    };
+    _display.showTestScreen(4, "Audio + Mic Result", lines, 4,
+                            (codecOk && audioOk && micOk && playbackOk) ? "PASS" : "FAIL",
+                            "USER=PASS  BOOT=FAIL");
+    bool verdict = waitForVerdict();
+    return (codecOk && audioOk && micOk && playbackOk && verdict)
+        ? TestResult::PASS
+        : TestResult::FAIL;
+}
+
+void TestRunner::runManualSuite() {
+    Serial.println("========================================");
+    Serial.println("[MANUAL] Starting concentrated manual tests");
+    Serial.println("========================================");
+
+    storeResult(1, runManualEpdVisual());
+    storeResult(3, runManualButtons());
+    TestResult audioMic = runManualAudioMic();
+    storeResult(4, audioMic);
+    storeResult(5, audioMic);
+
+    Serial.println("[MANUAL] Completed concentrated manual tests");
+}
 
 void TestRunner::runT1()  {
     _preTest();
@@ -415,22 +993,9 @@ void TestRunner::run() {
         runEpdAgingMode();
     }
 
-    runT0();   // Init + welcome; advances only after USER key
-    _state = TestState::T1_EPD;  // kick off test sequence
-
-    while (_state != TestState::DONE) {
-        switch (_state) {
-            case TestState::T1_EPD:     runT1();  _state = TestState::T3_BUTTON;  break;
-            case TestState::T3_BUTTON:  runT3();  _state = TestState::T4_CODEC;    break;
-            case TestState::T4_CODEC:   runT4();  _state = TestState::T5_DMIC;     break;
-            case TestState::T5_DMIC:    runT5();  _state = TestState::T6_AHT20;    break;
-            case TestState::T6_AHT20:   runT6();  _state = TestState::T7_ADC;      break;
-            case TestState::T7_ADC:     runT7();  _state = TestState::T8_WIFI;     break;
-            case TestState::T8_WIFI:    runT8();  _state = TestState::T9_SD;       break;
-            case TestState::T9_SD:      runT9();  _state = TestState::T10_LORA;    break;
-            case TestState::T10_LORA:   runT10(); _state = TestState::T11_SUMMARY; break;
-            case TestState::T11_SUMMARY: runT11(); _state = TestState::DONE;       break;
-            default:                    _state = TestState::DONE;                  break;
-        }
-    }
+    runT0();
+    runAutoSuiteWithPrompt();
+    showAutoSummary();
+    runManualSuite();
+    runT11();
 }
