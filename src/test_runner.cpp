@@ -1,7 +1,6 @@
 #include "test_runner.h"
 #include "config.h"
 #include "spi_buses.h"
-#include <Fonts/FreeSansBold18pt7b.h>
 
 // Definition for the second SPI bus (HSPI / SPI3) shared by SD + LoRa.
 // EPD keeps using the default `SPI` global (FSPI / SPI2).
@@ -275,8 +274,7 @@ void TestRunner::runEpdAgingMode() {
     pinMode(PIN_ADC_EN, OUTPUT);   digitalWrite(PIN_ADC_EN, LOW);
     pinMode(PIN_TEMP_CTL, OUTPUT); digitalWrite(PIN_TEMP_CTL, LOW);
 
-    auto drawCheckerboard = [&](uint16_t colorA, uint16_t colorB,
-                                const char* label) {
+    auto drawCheckerboard = [&](uint16_t colorA, uint16_t colorB) {
         auto& epd = _display.raw();
         constexpr int16_t kCols = 8;
         constexpr int16_t kRows = 8;
@@ -294,23 +292,6 @@ void TestRunner::runEpdAgingMode() {
                     epd.fillRect(x * kCellW, y * kCellH, kCellW, kCellH, color);
                 }
             }
-
-            epd.fillRect(72, 116, 256, 68, GxEPD_WHITE);
-            epd.drawRect(72, 116, 256, 68, GxEPD_BLACK);
-            epd.setFont(&FreeSansBold18pt7b);
-            epd.setTextColor(GxEPD_RED);
-
-            int16_t x1, y1;
-            uint16_t w, h;
-            epd.getTextBounds("EPD AGING", 0, 0, &x1, &y1, &w, &h);
-            epd.setCursor((DISP_W - (int16_t)w) / 2 - x1, 144);
-            epd.print("EPD AGING");
-
-            epd.setFont(&FreeSans9pt7b);
-            epd.setTextColor(GxEPD_BLACK);
-            epd.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
-            epd.setCursor((DISP_W - (int16_t)w) / 2 - x1, 170);
-            epd.print(label);
         } while (epd.nextPage());
     };
 
@@ -318,17 +299,17 @@ void TestRunner::runEpdAgingMode() {
     while (true) {
         Serial.printf("[EPD AGING] Round %lu: BLACK / WHITE\n",
                       (unsigned long)++round);
-        drawCheckerboard(GxEPD_BLACK, GxEPD_WHITE, "BLACK / WHITE");
+        drawCheckerboard(GxEPD_BLACK, GxEPD_WHITE);
         delay(1000);
 
         Serial.printf("[EPD AGING] Round %lu: RED / WHITE\n",
                       (unsigned long)++round);
-        drawCheckerboard(GxEPD_RED, GxEPD_WHITE, "RED / WHITE");
+        drawCheckerboard(GxEPD_RED, GxEPD_WHITE);
         delay(1000);
 
         Serial.printf("[EPD AGING] Round %lu: BLACK / RED\n",
                       (unsigned long)++round);
-        drawCheckerboard(GxEPD_BLACK, GxEPD_RED, "BLACK / RED");
+        drawCheckerboard(GxEPD_BLACK, GxEPD_RED);
         delay(1000);
     }
 }
