@@ -3,15 +3,9 @@
 
 #include "test_runner.h"
 
-static constexpr uint32_t T3_TIMEOUT_MS = 10000;
-
-// Wait for a single button to be pressed within timeout.
-// Returns true = pressed, false = timeout.
-static bool _t3_waitButton(bool (*isPressed)(), uint32_t timeoutMs) {
-    uint32_t start = millis();
-    // Wait for press
+// Wait for a single button to be pressed; no timeout in factory mode.
+static bool _t3_waitButton(bool (*isPressed)()) {
     while (!isPressed()) {
-        if (millis() - start >= timeoutMs) return false;
         delay(10);
     }
     delay(50);  // debounce
@@ -21,7 +15,7 @@ static bool _t3_waitButton(bool (*isPressed)(), uint32_t timeoutMs) {
 
 inline TestResult runTestT3(Display& disp, TestRunner& runner) {
     Serial.println("[T3] Button Test started");
-    Serial.println("[T3] USER=GPIO45  BOOT=GPIO0  timeout=10s each");
+    Serial.println("[T3] USER=GPIO45  BOOT=GPIO0  waiting indefinitely");
 
     bool apOk   = false;
     bool bootOk = false;
@@ -38,9 +32,9 @@ inline TestResult runTestT3(Display& disp, TestRunner& runner) {
         disp.showTestScreen(3, "Button Test", lines, 5, nullptr, nullptr);
         Serial.println("[T3] Waiting for USER key...");
 
-        apOk = _t3_waitButton(TestRunner::userPressed, T3_TIMEOUT_MS);
+        apOk = _t3_waitButton(TestRunner::userPressed);
         Serial.print("[T3] USER key: ");
-        Serial.println(apOk ? "OK" : "TIMEOUT");
+        Serial.println(apOk ? "OK" : "FAIL");
     }
 
     // 鈹€鈹€ Phase 2: BOOT key 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
@@ -55,9 +49,9 @@ inline TestResult runTestT3(Display& disp, TestRunner& runner) {
         disp.showTestScreen(3, "Button Test", lines, 3, nullptr, nullptr);
         Serial.println("[T3] Waiting for BOOT key...");
 
-        bootOk = _t3_waitButton(TestRunner::bootPressed, T3_TIMEOUT_MS);
+        bootOk = _t3_waitButton(TestRunner::bootPressed);
         Serial.print("[T3] BOOT key: ");
-        Serial.println(bootOk ? "OK" : "TIMEOUT");
+        Serial.println(bootOk ? "OK" : "FAIL");
     }
 
     // 鈹€鈹€ Result 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€

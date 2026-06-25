@@ -18,12 +18,11 @@ inline TestResult runTestT7(Display& disp, TestRunner& runner) {
 
     Serial.println("[T7] Bypass: charger BAT node is not a reliable battery-presence signal");
     const char* lines[] = {
-        "Battery ADC bypassed.",
-        "Charger BAT node can read",
-        "valid voltage without battery.",
+        "ADC bypassed",
+        "Charger masks battery",
     };
     disp.showTestScreen(7, "Battery ADC",
-                        lines, 3,
+                        lines, 2,
                         "PASS",
                         "USER=Next");
 

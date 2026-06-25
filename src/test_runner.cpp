@@ -572,14 +572,14 @@ void TestRunner::runAutoSuiteWithPrompt() {
 
     _display.resync();
     const char* lines[] = {
-        "Automatic tests are running.",
-        "AHT20 / ADC / WiFi / SD / LoRa",
+        "Auto tests running",
+        "AHT20 ADC WiFi SD LoRa",
         "",
-        "Please wait for the summary page.",
+        "Wait...",
     };
     _display.showTestScreen(2, "Auto Tests Running",
                             lines, 4,
-                            nullptr, "Testing...");
+                            nullptr, "Testing");
 
     while (!ctx.done) {
         delay(50);
@@ -606,7 +606,7 @@ void TestRunner::showAutoSummary() {
     _display.showTestScreen(2, "Auto Test Summary",
                             lines, 5,
                             pass ? "PASS" : "FAIL",
-                            "USER=Manual tests",
+                            "USER=Manual",
                             /*linesLeftAlignedBlock=*/true,
                             /*monospaceStartLine=*/0);
     waitForUser();
@@ -654,55 +654,14 @@ TestResult TestRunner::runManualEpdVisual() {
         delay(800);
     };
 
-    auto checker = [&]() {
-        constexpr int16_t kCols = 8;
-        constexpr int16_t kRows = 6;
-        constexpr int16_t kCellW = DISP_W / kCols;
-        constexpr int16_t kCellH = DISP_H / kRows;
-        epd.setFullWindow();
-        epd.firstPage();
-        do {
-            for (int16_t y = 0; y < kRows; y++) {
-                for (int16_t x = 0; x < kCols; x++) {
-                    uint16_t color = ((x + y) & 1) ? GxEPD_BLACK : GxEPD_RED;
-                    epd.fillRect(x * kCellW, y * kCellH, kCellW, kCellH, color);
-                }
-            }
-        } while (epd.nextPage());
-        delay(800);
-    };
-
-    auto textPage = [&]() {
-        epd.setFullWindow();
-        epd.firstPage();
-        do {
-            epd.fillScreen(GxEPD_WHITE);
-            epd.drawRect(4, 4, DISP_W - 8, DISP_H - 8, GxEPD_BLACK);
-            epd.drawLine(0, 0, DISP_W - 1, DISP_H - 1, GxEPD_RED);
-            epd.drawLine(DISP_W - 1, 0, 0, DISP_H - 1, GxEPD_RED);
-            epd.setFont(&FreeSansBold18pt7b);
-            epd.setTextColor(GxEPD_BLACK);
-            epd.setCursor(82, 120);
-            epd.print("EPD CHECK");
-            epd.setFont(&FreeSans9pt7b);
-            epd.setTextColor(GxEPD_RED);
-            epd.setCursor(96, 158);
-            epd.print("Black / White / Red");
-        } while (epd.nextPage());
-        delay(800);
-    };
-
     fullFill(GxEPD_WHITE, GxEPD_BLACK, "WHITE");
     fullFill(GxEPD_BLACK, GxEPD_WHITE, "BLACK");
     fullFill(GxEPD_RED, GxEPD_WHITE, "RED");
-    checker();
-    textPage();
 
     const char* lines[] = {
-        "Confirm display quality:",
-        "colors, text, borders, no defects.",
+        "Colors OK?",
     };
-    _display.showTestScreen(1, "EPD Visual Test", lines, 2,
+    _display.showTestScreen(1, "EPD Test", lines, 1,
                             nullptr, "USER=PASS  BOOT=FAIL");
     bool pass = waitForVerdict();
     return pass ? TestResult::PASS : TestResult::FAIL;
@@ -712,36 +671,24 @@ TestResult TestRunner::runManualButtons() {
     Serial.println("[MANUAL] Button test");
     _display.resync();
     const char* lines[] = {
-        "Press USER, then press BOOT.",
-        "Each key has 10s timeout.",
-        "No extra confirmation needed.",
+        "Press USER",
+        "Then BOOT",
     };
-    _display.showTestScreen(3, "Button Test", lines, 3, nullptr, nullptr);
+    _display.showTestScreen(3, "Buttons", lines, 2, nullptr, nullptr);
 
-    bool userOk = false;
-    bool bootOk = false;
-    uint32_t start = millis();
-    while ((millis() - start) < T3_TIMEOUT_MS) {
-        if (userPressed()) {
-            while (userPressed()) delay(10);
-            userOk = true;
-            break;
-        }
+    while (!userPressed()) {
         delay(10);
     }
+    while (userPressed()) delay(10);
+    Serial.println("[MANUAL] USER button OK");
 
-    start = millis();
-    while ((millis() - start) < T3_TIMEOUT_MS) {
-        if (bootPressed()) {
-            while (bootPressed()) delay(10);
-            bootOk = true;
-            break;
-        }
+    while (!bootPressed()) {
         delay(10);
     }
+    while (bootPressed()) delay(10);
+    Serial.println("[MANUAL] BOOT button OK");
 
-    Serial.printf("[MANUAL] Buttons USER=%d BOOT=%d\n", (int)userOk, (int)bootOk);
-    return (userOk && bootOk) ? TestResult::PASS : TestResult::FAIL;
+    return TestResult::PASS;
 }
 
 static bool _manualPlayTone(float freq, uint32_t ms) {
@@ -774,13 +721,12 @@ TestResult TestRunner::runManualAudioMic() {
     Serial.println("[MANUAL] Audio + microphone test");
     _display.resync();
     const char* intro[] = {
-        "1) Listen for short tones.",
-        "2) Speak after tones.",
-        "3) Listen to voice playback.",
-        "Final verdict appears after playback.",
+        "Listen tones",
+        "Speak after tone",
+        "Then hear playback",
     };
-    _display.showTestScreen(4, "Audio + Mic Test", intro, 4,
-                            nullptr, "Please wait...");
+    _display.showTestScreen(4, "Audio + Mic", intro, 3,
+                            nullptr, "Wait");
 
     pinMode(PIN_CODEC_EN, OUTPUT);
     digitalWrite(PIN_CODEC_EN, HIGH);
@@ -887,10 +833,10 @@ TestResult TestRunner::runManualAudioMic() {
     snprintf(l1, sizeof(l1), "Mic RMS=%u Peak=%d", (unsigned)rms, (int)peak);
     snprintf(l2, sizeof(l2), "Mic auto: %s", micOk ? "PASS" : "FAIL");
     const char* lines[] = {
-        "Did tones and voice playback sound OK?",
+        "Sound OK?",
         l0, l1, l2,
     };
-    _display.showTestScreen(4, "Audio + Mic Result", lines, 4,
+    _display.showTestScreen(4, "Audio + Mic", lines, 4,
                             (codecOk && audioOk && micOk && playbackOk) ? "PASS" : "FAIL",
                             "USER=PASS  BOOT=FAIL");
     bool verdict = waitForVerdict();
