@@ -64,6 +64,7 @@ private:
     void runT9();
     void runT10();
     void runT11();
+    void runEpdAgingMode();
 
     // Re-sync EPD before each test (recover from peripheral side-effects).
     void _preTest();

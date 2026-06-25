@@ -1,8 +1,7 @@
 #include "test_runner.h"
 #include "config.h"
 #include "spi_buses.h"
-#include <esp_sleep.h>
-#include <driver/gpio.h>
+#include <Fonts/FreeSansBold18pt7b.h>
 
 // Definition for the second SPI bus (HSPI / SPI3) shared by SD + LoRa.
 // EPD keeps using the default `SPI` global (FSPI / SPI2).
@@ -138,6 +137,7 @@ void TestRunner::runT0() {
 // during deep sleep. Mirrors the pattern used in the ESP32-Dashboard BSP for
 // this same board (nm_display_420/Board.cpp).
 
+#if 0
 static void _enterDeepSleep() {
     Serial.println("[FACTORY TEST] Powering off all modules...");
 
@@ -179,6 +179,7 @@ static void _enterDeepSleep() {
     esp_deep_sleep_start();
     // Never reached.
 }
+#endif
 
 // ─── T11 — Summary ────────────────────────────────────────────────────────────
 
@@ -234,7 +235,7 @@ void TestRunner::runT11() {
 
     _display.showTestScreen(11, "Factory Test Summary",
                             lines, kTests,
-                            summary, "Device entering deep sleep...",
+                            summary, "Press USER for EPD aging mode",
                             /*linesLeftAlignedBlock=*/true,
                             /*monospaceStartLine=*/0);
 
@@ -254,12 +255,82 @@ void TestRunner::runT11() {
     }
     Serial.println("========================================");
 
-    // Hibernate the EPD panel so it retains the summary image at minimum power.
-    _display.hibernate();
+    Serial.println("[FACTORY TEST] Waiting for USER key to start EPD aging mode...");
+    waitForUser();
+    runEpdAgingMode();
+}
 
-    // Power off all peripherals and enter ESP32 deep sleep.
-    // GPIO states are latched so module enable pins remain LOW during sleep.
-    _enterDeepSleep();
+// EPD aging / burn-in clear mode. This intentionally never returns: the
+// operator can power-cycle or reset the unit after the residual image clears.
+void TestRunner::runEpdAgingMode() {
+    Serial.println("========================================");
+    Serial.println("[EPD AGING] Started: cycling 3-color checkerboards.");
+    Serial.println("[EPD AGING] Power-cycle or reset the device to stop.");
+    Serial.println("========================================");
+
+    _display.resync();
+    pinMode(PIN_PA_CTRL, OUTPUT);  digitalWrite(PIN_PA_CTRL, LOW);
+    pinMode(PIN_LORA_EN, OUTPUT);  digitalWrite(PIN_LORA_EN, LOW);
+    pinMode(PIN_CODEC_EN, OUTPUT); digitalWrite(PIN_CODEC_EN, LOW);
+    pinMode(PIN_ADC_EN, OUTPUT);   digitalWrite(PIN_ADC_EN, LOW);
+    pinMode(PIN_TEMP_CTL, OUTPUT); digitalWrite(PIN_TEMP_CTL, LOW);
+
+    auto drawCheckerboard = [&](uint16_t colorA, uint16_t colorB,
+                                const char* label) {
+        auto& epd = _display.raw();
+        constexpr int16_t kCols = 8;
+        constexpr int16_t kRows = 8;
+        constexpr int16_t kCellW = DISP_W / kCols;
+        constexpr int16_t kCellH = DISP_H / kRows;
+
+        epd.setFullWindow();
+        epd.firstPage();
+        do {
+            epd.fillScreen(GxEPD_WHITE);
+            for (int16_t y = 0; y < kRows; y++) {
+                for (int16_t x = 0; x < kCols; x++) {
+                    const bool alt = ((x + y) & 1) != 0;
+                    const uint16_t color = alt ? colorA : colorB;
+                    epd.fillRect(x * kCellW, y * kCellH, kCellW, kCellH, color);
+                }
+            }
+
+            epd.fillRect(72, 116, 256, 68, GxEPD_WHITE);
+            epd.drawRect(72, 116, 256, 68, GxEPD_BLACK);
+            epd.setFont(&FreeSansBold18pt7b);
+            epd.setTextColor(GxEPD_RED);
+
+            int16_t x1, y1;
+            uint16_t w, h;
+            epd.getTextBounds("EPD AGING", 0, 0, &x1, &y1, &w, &h);
+            epd.setCursor((DISP_W - (int16_t)w) / 2 - x1, 144);
+            epd.print("EPD AGING");
+
+            epd.setFont(&FreeSans9pt7b);
+            epd.setTextColor(GxEPD_BLACK);
+            epd.getTextBounds(label, 0, 0, &x1, &y1, &w, &h);
+            epd.setCursor((DISP_W - (int16_t)w) / 2 - x1, 170);
+            epd.print(label);
+        } while (epd.nextPage());
+    };
+
+    uint32_t round = 0;
+    while (true) {
+        Serial.printf("[EPD AGING] Round %lu: BLACK / WHITE\n",
+                      (unsigned long)++round);
+        drawCheckerboard(GxEPD_BLACK, GxEPD_WHITE, "BLACK / WHITE");
+        delay(1000);
+
+        Serial.printf("[EPD AGING] Round %lu: RED / WHITE\n",
+                      (unsigned long)++round);
+        drawCheckerboard(GxEPD_RED, GxEPD_WHITE, "RED / WHITE");
+        delay(1000);
+
+        Serial.printf("[EPD AGING] Round %lu: BLACK / RED\n",
+                      (unsigned long)++round);
+        drawCheckerboard(GxEPD_BLACK, GxEPD_RED, "BLACK / RED");
+        delay(1000);
+    }
 }
 
 // ─── Serial log helper ───────────────────────────────────────────────────────
