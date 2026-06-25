@@ -267,7 +267,7 @@ void TestRunner::runEpdAgingMode() {
     Serial.println("[EPD AGING] Power-cycle or reset the device to stop.");
     Serial.println("========================================");
 
-    _display.resync();
+    _display.init();
     pinMode(PIN_PA_CTRL, OUTPUT);  digitalWrite(PIN_PA_CTRL, LOW);
     pinMode(PIN_LORA_EN, OUTPUT);  digitalWrite(PIN_LORA_EN, LOW);
     pinMode(PIN_CODEC_EN, OUTPUT); digitalWrite(PIN_CODEC_EN, LOW);
@@ -402,6 +402,19 @@ void TestRunner::runT10() {
 // ─── Main entry ───────────────────────────────────────────────────────────────
 
 void TestRunner::run() {
+    Serial.begin(115200);
+    pinMode(PIN_USER_BTN, INPUT_PULLUP);
+    pinMode(PIN_BOOT_BTN, INPUT_PULLUP);
+    delay(50);
+
+    if (digitalRead(PIN_USER_BTN) == LOW) {
+        Serial.println();
+        Serial.println("========================================");
+        Serial.println("[BOOT] USER held at power-on: entering EPD aging mode.");
+        Serial.println("========================================");
+        runEpdAgingMode();
+    }
+
     runT0();   // Init + welcome; advances only after USER key
     _state = TestState::T1_EPD;  // kick off test sequence
 

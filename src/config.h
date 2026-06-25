@@ -1,7 +1,7 @@
 #pragma once
 
 // ─── Firmware version ────────────────────────────────────────────────────────
-#define FW_VERSION  "v1.4.02"
+#define FW_VERSION  "v1.4.03"
 #define BOARD_NAME  "NM-EPD-420"
 
 // ─── EPD (SPI0 / VSPI) ───────────────────────────────────────────────────────
