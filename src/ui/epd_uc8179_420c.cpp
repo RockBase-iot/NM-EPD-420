@@ -6,7 +6,7 @@ static inline uint8_t remapPlaneData(uint8_t command, uint8_t data)
 }
 
 GxEPD2_420c_NM_UC8179::GxEPD2_420c_NM_UC8179(int16_t cs, int16_t dc, int16_t rst, int16_t busy)
-    : GxEPD2_EPD(cs, dc, rst, busy, LOW, 10000000, WIDTH, HEIGHT,
+    : GxEPD2_EPD(cs, dc, rst, busy, LOW, 25000000, WIDTH, HEIGHT,
                  panel, hasColor, hasPartialUpdate, hasFastPartialUpdate)
 {
 }

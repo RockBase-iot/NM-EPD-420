@@ -9,6 +9,8 @@
 #include <GxEPD2_GFX.h>
 #include <gdey3c/GxEPD2_420c_GDEY042Z98.h>
 #include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <Fonts/FreeSans9pt7b.h>
 #include <Fonts/FreeSansBold9pt7b.h>
 #include <Fonts/FreeSansBold18pt7b.h>
@@ -27,6 +29,7 @@ static constexpr int16_t DISP_H = 300;
 class Display {
 public:
     static constexpr uint8_t MAX_LINES = 10;
+    inline static uint8_t s_busyActiveLevel = HIGH;
 
     void init() {
         SPI.begin(PIN_EPD_SCK, PIN_EPD_MISO, PIN_EPD_MOSI, PIN_EPD_CS);
@@ -39,25 +42,22 @@ public:
     }
 
     void showWelcome() {
-        auto& epd = raw();
-        epd.setFullWindow();
-        epd.firstPage();
-        do {
-            epd.fillScreen(GxEPD_WHITE);
-            epd.setFont(&FreeSansBold18pt7b);
-            epd.setTextColor(GxEPD_BLACK);
-            _printCentered(BOARD_NAME, 68);
-
-            epd.setFont(&FreeSans9pt7b);
-            char fwLine[40];
-            snprintf(fwLine, sizeof(fwLine), "Factory Test FW %s", FW_VERSION);
-            _printCentered(fwLine, 95);
-
-            epd.drawLine(10, 112, DISP_W - 10, 112, GxEPD_BLACK);
-
-            epd.setFont(&FreeSansBold9pt7b);
-            _printCentered("Press USER button to Start", 170);
-        } while (epd.nextPage());
+        const bool validateBusy = (EPD_DRIVER_MODE == 2) && !_autoValidated;
+        if (_renderWelcomeInternal(validateBusy)) {
+            _autoValidated = true;
+            return;
+        }
+#if EPD_DRIVER_MODE == 2
+        Serial.printf("[EPDDetect] validation failed for %s, retry with %s\n",
+                      _isUc8179 ? "UC8179" : "SSD1683",
+                      _isUc8179 ? "SSD1683" : "UC8179");
+        _isUc8179 = !_isUc8179;
+        _active = _isUc8179 ? static_cast<EpdDisplay*>(&_uc8179)
+                            : static_cast<EpdDisplay*>(&_ssd1683);
+        _initActive(true);
+        _autoValidated = true;
+        _renderWelcomeInternal(false);
+#endif
     }
 
     void showTestScreen(
@@ -98,6 +98,7 @@ public:
 
     EpdDisplay& raw() { return *_active; }
     bool isUc8179() const { return _isUc8179; }
+    static bool isPanelBusy() { return digitalRead(PIN_EPD_BUSY) == s_busyActiveLevel; }
 
 private:
     GxEPD2_420c_GDEY042Z98 _ssd1683Driver{
@@ -110,8 +111,38 @@ private:
     Uc8179Display  _uc8179{_uc8179Driver};
     EpdDisplay*    _active = &_ssd1683;
     bool           _isUc8179 = false;
+    bool           _autoValidated = false;
+
+    struct BusyProbe {
+        volatile bool run = false;
+        volatile uint32_t activeMs = 0;
+        uint8_t activeLevel = HIGH;
+    };
+
+    static void _busyProbeTask(void* arg) {
+        auto* probe = static_cast<BusyProbe*>(arg);
+        pinMode(PIN_EPD_BUSY, INPUT);
+        while (probe->run) {
+            if (digitalRead(PIN_EPD_BUSY) == probe->activeLevel) {
+                probe->activeMs = probe->activeMs + 1;
+            }
+            vTaskDelay(1);
+        }
+        vTaskDelete(nullptr);
+    }
+
+    void _primeControlPins() {
+        pinMode(PIN_EPD_CS, OUTPUT);
+        digitalWrite(PIN_EPD_CS, HIGH);
+        pinMode(PIN_EPD_DC, OUTPUT);
+        digitalWrite(PIN_EPD_DC, HIGH);
+        pinMode(PIN_EPD_RST, OUTPUT);
+        digitalWrite(PIN_EPD_RST, HIGH);
+        pinMode(PIN_EPD_BUSY, INPUT_PULLUP);
+    }
 
     void _initActive(bool initialPowerOn) {
+        _primeControlPins();
         _active->init(115200, initialPowerOn, 2, false);
         _active->epd2.selectFastFullUpdate(_isUc8179 ? false : (EPD_FAST_FULL_UPDATE != 0));
         _active->setRotation(0);
@@ -131,6 +162,8 @@ private:
 #endif
         _active = _isUc8179 ? static_cast<EpdDisplay*>(&_uc8179)
                             : static_cast<EpdDisplay*>(&_ssd1683);
+        s_busyActiveLevel = _isUc8179 ? LOW : HIGH;
+        _autoValidated = false;
         Serial.flush();
     }
 
@@ -164,6 +197,50 @@ private:
                       lowCount, highCount, firstLowAt,
                       isUc8179 ? "UC8179" : "SSD1683");
         return isUc8179;
+    }
+
+    bool _renderWelcomeInternal(bool validateBusy) {
+        auto& epd = raw();
+        BusyProbe probe;
+        TaskHandle_t probeTask = nullptr;
+
+        if (validateBusy) {
+            probe.run = true;
+            probe.activeLevel = _isUc8179 ? LOW : HIGH;
+            xTaskCreatePinnedToCore(_busyProbeTask, "epdBusy", 2048,
+                                    &probe, 1, &probeTask, 0);
+        }
+
+        epd.setFullWindow();
+        epd.firstPage();
+        do {
+            epd.fillScreen(GxEPD_WHITE);
+            epd.setFont(&FreeSansBold18pt7b);
+            epd.setTextColor(GxEPD_BLACK);
+            _printCentered(BOARD_NAME, 68);
+
+            epd.setFont(&FreeSans9pt7b);
+            char fwLine[40];
+            snprintf(fwLine, sizeof(fwLine), "Factory Test FW %s", FW_VERSION);
+            _printCentered(fwLine, 95);
+
+            epd.drawLine(10, 112, DISP_W - 10, 112, GxEPD_BLACK);
+
+            epd.setFont(&FreeSansBold9pt7b);
+            _printCentered("Press USER button to Start", 170);
+        } while (epd.nextPage());
+
+        if (!validateBusy) {
+            return true;
+        }
+
+        probe.run = false;
+        delay(5);
+        Serial.printf("[EPDDetect] validate driver=%s activeMs=%lu level=%s\n",
+                      _isUc8179 ? "UC8179" : "SSD1683",
+                      (unsigned long)probe.activeMs,
+                      _isUc8179 ? "LOW" : "HIGH");
+        return probe.activeMs >= 20;
     }
 
     void _printCentered(const char* str, int16_t y) {

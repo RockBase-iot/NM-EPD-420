@@ -43,14 +43,14 @@ static const uint8_t  BTN_DEBOUNCE_STEP_MS = 10;
 
 static bool _btnPressedDebounced(uint8_t pin) {
     // Quick reject: BUSY already high, or button already high.
-    if (digitalRead(PIN_EPD_BUSY) == HIGH) return false;
+    if (Display::isPanelBusy())      return false;
     if (digitalRead(pin) != LOW)           return false;
 
     // Stable-low debounce: BUSY must stay low and button must stay low for
     // BTN_DEBOUNCE_SAMPLES consecutive samples.
     for (uint8_t i = 1; i < BTN_DEBOUNCE_SAMPLES; i++) {
         delay(BTN_DEBOUNCE_STEP_MS);
-        if (digitalRead(PIN_EPD_BUSY) == HIGH) return false;
+        if (Display::isPanelBusy()) return false;
         if (digitalRead(pin) != LOW)           return false;
     }
     return true;
