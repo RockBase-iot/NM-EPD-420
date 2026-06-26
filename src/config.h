@@ -1,7 +1,7 @@
 #pragma once
 
 // ─── Firmware version ────────────────────────────────────────────────────────
-#define FW_VERSION  "v1.4.04"
+#define FW_VERSION  "v1.4.05"
 #define BOARD_NAME  "NM-EPD-420"
 
 // ─── EPD (SPI0 / VSPI) ───────────────────────────────────────────────────────
@@ -68,6 +68,7 @@
 // improves latency moderately but cannot remove the panel's inherent delay.
 #define EPD_PAGE_HEIGHT           300   // 300 = full buffer, 150 = half buffer
 #define EPD_FAST_FULL_UPDATE      1     // 1 = use fast full-refresh waveform
+#define EPD_DRIVER_MODE           2     // 0=SSD1683 1=UC8179 2=auto detect
 
 // ─── Feature switches ─────────────────────────────────────────────────────────
 #define BATTERY_ADC_AVAILABLE  1   // 1 = test (IO3 + enable IO43)
