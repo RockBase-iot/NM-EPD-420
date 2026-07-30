@@ -36,6 +36,12 @@ NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板
 | **ESP32-weather-epd** | 低功耗天气站，从 OpenWeatherMap 获取天气并在墨水屏展示 | [RockBase-iot/esp32-weather-epd@`main`](https://github.com/RockBase-iot/esp32-weather-epd/tree/main) |
 | **ESP32-Dashboard** | 多功能电子墨水屏 Dashboard：天气、空气质量、室内温湿度、Web 配网等 | [RockBase-iot/ESP32-Dashboard@`main`](https://github.com/RockBase-iot/ESP32-Dashboard/tree/main) |
 
+**相关项目应用代码已经可以在 [RockBase IoT Web Flash](https://flash.rockbaseiot.com) 获取。**
+
+![ESP32-Dashboard Application](image/esp-dashboard.png)
+
+![Meshtastic Application](image/nm-epd-420-mesh.png)
+
 ---
 
 ## 3. 硬件资源与引脚定义
@@ -111,6 +117,14 @@ NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板
 |                 | Codec EN         | 44   | OUT  | ES8311 上电使能（HIGH 使能）              |
 |                 | ADC EN           | 43   | OUT  | 电池 ADC 电路使能（HIGH 使能）            |
 | 电池 ADC        | BATT_ADC         | 3    | IN   | 电池分压采样输入                          |
+
+![Two Version interfaces](image/nm_epd_420_interfaces_compare.png)
+
+The LoRa version with HT-RA62 module (SX1262), which can be used for Meshtastic, MeshCore, and other LoRa applications. The No LoRa version is without the module, which can be used for general applications.
+
+![LoRa Version interfaces](image/nm_epd_420_interfaces_lora.png)
+
+![No LoRa Version interfaces](image/nm_epd_420_interfaces_no_lora.png)
 
 ### 3.4 配件与电源
 
@@ -263,6 +277,10 @@ src/
 | `SPI`, `Wire`, `WiFi`, `SD`        | 3.2.1   | 自带       |
 | `Adafruit GFX Library`             | 1.12.6  | 间接依赖   |
 
+### 5.4 代码共享
+
+若你希望能够更加快速的将你的代码与社区共享，可以参考[RockBase IoT ESPWebApps](https://github.com/RockBase-iot/ESPWebApps)项目，按照现有的框架和规范进行开发，这样用户可以通过 [RockBase IoT Web Flash](https://flash.rockbaseiot.com) 进行在线烧录。
+
 ---
 
 ## 6. 仓库目录
@@ -282,9 +300,9 @@ NM-EPD-420/
 
 ## 7. 购买渠道
 
-NM-EPD-420 仍在测试完善中，预计 2026 年 8 月正式上架。届时可通过以下渠道购买：
+NM-EPD-420 第一批样机已经按照计划于 2026 年 8 月正式上架，目前已经可以接受订单。可通过以下渠道购买：
 
 * [Amazon RockBase IoT](https://www.amazon.com/gp/product/B0H1QCHMW6)
 * [RockBase IoT Store](https://www.aliexpress.com/store/1105401362)
-* [RockBase Shop](https://rockbase.shop)
+* [RockBase Shop](https://rockbase.shop/products/nm-epd-420/)
 * [NMTech Global Store](https://www.aliexpress.com/store/1104265822)

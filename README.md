@@ -16,7 +16,7 @@ The NM-EPD-420 packs the core resources needed for E-ink projects onto a single 
 * **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**
 * **Audio**: ES8311 audio codec + external Class-D amplifier + onboard speaker, plus an LMD4737 PDM digital microphone
 * **Environment sensor**: AHT20 temperature/humidity sensor with independent power switch
-* **Wireless extension**: Header for **SX126x** family LoRa modules (shares SPI bus with the SD card)
+* **Wireless extension**: Header for **SX126x** family LoRa modules (shares SPI bus with the SD card) (optional)
 * **Storage & I/O**: µSD card slot, USER / BOOT buttons, battery ADC, JST 1.25 2-Pin battery connector
 * **Low-power design**: Independent enable pins for each peripheral module allow complete power-down before ESP32 deep sleep
 
@@ -30,11 +30,17 @@ The following projects have been ported to the NM-EPD-420. Clone the linked bran
 
 | Project | Description | Adapted repository / branch |
 |---------|-------------|-----------------------------|
-| **Meshtastic** | Off-grid LoRa mesh messaging; shows node info, messages, and sensor data on the 4.2" E-ink panel | [RockBase-iot/meshtastic-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshtastic-firmware/tree/nm-epd-420) |
-| **TRMNL-Firmware** | TRMNL E-ink content framework; fetches images/content from a server on a schedule | [RockBase-iot/trmnl-firmware@`main`](https://github.com/RockBase-iot/trmnl-firmware/tree/main) |
-| **Biscuit** | Multi-purpose tool / entertainment firmware for E-ink devices | [RockBase-iot/biscuit@`dev`](https://github.com/RockBase-iot/biscuit/tree/dev) |
-| **ESP32-weather-epd** | Low-power weather station; fetches data from OpenWeatherMap and displays it on E-ink | [RockBase-iot/esp32-weather-epd@`nm-display-420`](https://github.com/RockBase-iot/esp32-weather-epd/tree/nm-display-420) |
+| **Meshtastic** | Off-grid LoRa mesh messaging; shows node info, messages, and sensor data on the 4.2" E-ink panel (HT-RA62 module, SX1262) | [RockBase-iot/meshtastic-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshtastic-firmware/tree/nm-epd-420) |
+| **TRMNL-Firmware** | TRMNL E-ink content framework; fetches images/content from a server on a schedule | [RockBase-iot/trmnl-firmware@`nm-epd-420`](https://github.com/RockBase-iot/trmnl-firmware/tree/nm-epd-420) |
+| **Biscuit** | Multi-purpose tool / entertainment firmware for E-ink devices | [RockBase-iot/biscuit@`master`](https://github.com/RockBase-iot/biscuit/tree/master) |
+| **ESP32-weather-epd** | Low-power weather station; fetches data from OpenWeatherMap and displays it on E-ink | [RockBase-iot/esp32-weather-epd@`main`](https://github.com/RockBase-iot/esp32-weather-epd/tree/main) |
 | **ESP32-Dashboard** | Multi-function E-ink dashboard: weather, air quality, indoor T/RH, Web config portal, etc. | [RockBase-iot/ESP32-Dashboard@`main`](https://github.com/RockBase-iot/ESP32-Dashboard/tree/main) |
+
+**Application firmware for the related projects is already available on [RockBase IoT Web Flash](https://flash.rockbaseiot.com).**
+
+![ESP32-Dashboard Application](image/esp-dashboard.png)
+
+![Meshtastic Application](image/nm-epd-420-mesh.png)
 
 ---
 
@@ -71,7 +77,7 @@ The following projects have been ported to the NM-EPD-420. Clone the linked bran
 | Mic          | **LMD4737** PDM DMIC          | I²S (DMIC mode) | Sample rate 16 kHz                    |
 | T/RH sensor  | **AHT20**                     | I²C 0x38        | Power-gated via `PIN_TEMP_CTL`        |
 | SD card      | µSD                           | SPI (HSPI)      | Shared bus with LoRa                  |
-| LoRa modem   | **SX126x** family             | SPI (HSPI)      | CS / RST / BUSY / DIO1 GPIOs          |
+| LoRa modem   | HT-RA62 **SX1262** family     | SPI (HSPI)      | CS / RST / BUSY / DIO1 GPIOs          |
 | Buttons      | USER, BOOT                    | GPIO            | Active LOW, external pull-up          |
 | Audio amp    | External Class-D              | EN GPIO         | Enabled by `PIN_PA_CTRL` HIGH         |
 
@@ -112,10 +118,18 @@ The following projects have been ported to the NM-EPD-420. Clone the linked bran
 |                 | ADC EN           | 43   | OUT       | Battery ADC circuit enable (HIGH = on)  |
 | Battery ADC     | BATT_ADC         | 3    | IN        | Battery voltage sense (resistor divider)|
 
+![Two Version interfaces](image/nm_epd_420_interfaces_compare.png)
+
+The LoRa version with HT-RA62 module (SX1262), which can be used for Meshtastic, MeshCore, and other LoRa applications. The No LoRa version is without the module, which can be used for general applications.
+
+![LoRa Version interfaces](image/nm_epd_420_interfaces_lora.png)
+
+![No LoRa Version interfaces](image/nm_epd_420_interfaces_no_lora.png)
+
 ### 3.4 Accessories and power
 
 * **3D case**: STL files are in [docs/case](docs/case), including buttons, top plate, back cover, etc.
-* **Battery**: A 3.7 V Li-Po battery with protection circuit, capacity ≥ 500 mAh, is recommended. The PCB has a JST 1.25 PH 2-Pin connector (red = positive, black = negative). Recommended size: 603030.
+* **Battery**: A 3.7 V Li-Po battery with protection circuit, capacity ≥ 500 mAh, is recommended. The PCB has a JST 1.25 PH 2-Pin connector (red = positive, black = negative). Recommended size: 603030. [Buy on AliExpress JST 1.25 2Pin 603030 600mAh](https://www.aliexpress.com/item/32853151195.html)
 
 ---
 
@@ -137,7 +151,7 @@ The firmware in this repository exercises every on-board peripheral in a fixed s
 | T8   | Wi-Fi scan      | 2.4 GHz AP scan, expect ≥ 1 network          | ![T8](image/T8.png) |
 | T9   | SD card R/W     | HSPI mount + write / read-back verify        | ![T9](image/T9.png) |
 | T10  | LoRa SPI bus    | Reset modem, check BUSY low                  | — |
-| T11  | Summary         | Per-item PASS/FAIL/SKIP table + deep sleep   | ![T11](image/T11.png) |
+| T11  | Summary         | Per-item PASS/FAIL/SKIP table + EPD hibernate + deep sleep | ![T11](image/T11.png) |
 
 A complete run typically takes ~3 min, dominated by EPD full-refresh time (~10 s per page on a 3-color panel).
 
@@ -203,7 +217,7 @@ Typical serial output during a run:
 
 This board is essentially a fully-featured ESP32-S3 carrier. To start your own project:
 
-1. Pick one of the already-supported projects from [Section 2](#2-already-supported-open-source-projects), or create a fresh PlatformIO / Arduino project.
+1. Pick one of the already-supported projects from [Section 2](#2-already-supported-open-source-projects) and clone the corresponding branch, or create a fresh PlatformIO / Arduino project.
 2. Copy the pin configuration below into your project's `config.h` or `platformio.ini`.
 3. Initialize the SPI / I²C / I²S buses as needed. Remember: **EPD uses FSPI, SD + LoRa share HSPI**.
 4. Drive the corresponding module-enable pin HIGH before using a peripheral, and LOW afterwards to save power.
@@ -263,6 +277,10 @@ Library deps (see [platformio.ini](platformio.ini)):
 | `SPI`, `Wire`, `WiFi`, `SD`        | 3.2.1   | bundled   |
 | `Adafruit GFX Library`             | 1.12.6  | (dep)     |
 
+### 5.4 Sharing your code
+
+If you want to share your code with the community more quickly, check out the [RockBase IoT ESPWebApps](https://github.com/RockBase-iot/ESPWebApps) project. Develop your application following the existing framework and conventions, and users will be able to flash it online through [RockBase IoT Web Flash](https://flash.rockbaseiot.com).
+
 ---
 
 ## 6. Repository layout
@@ -280,12 +298,11 @@ NM-EPD-420/
 
 ---
 
-## 7. Where to buy?
+## 7. Where to buy
 
-The NM-EPD-420 is still under testing and is expected to be available around August 2026. It will be published on our website and on Aliexpress / Amazon / Shopify, as well as NMTech Stores.
+The first batch of NM-EPD-420 units went on sale as scheduled in August 2026 and is now available for order. You can purchase through the following channels:
 
 * [Amazon RockBase IoT](https://www.amazon.com/gp/product/B0H1QCHMW6)
 * [RockBase IoT Store](https://www.aliexpress.com/store/1105401362)
-* [RockBase Shop](https://rockbase.shop)
+* [RockBase Shop](https://rockbase.shop/products/nm-epd-420/)
 * [NMTech Global Store](https://www.aliexpress.com/store/1104265822)
-* [NMMiner Website](https://www.nmminer.com)
