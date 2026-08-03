@@ -13,7 +13,7 @@ The **NM-EPD-420** is an **ESP32-S3** based 4.2-inch tri-color E-ink development
 The NM-EPD-420 packs the core resources needed for E-ink projects onto a single board:
 
 * **MCU**: ESP32-S3 (16 MB Flash, PSRAM, dual-core 240 MHz, 2.4 GHz Wi-Fi and BLE 5)
-* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**
+* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**; Tested black/white E-ink panel (GxEPD2_420_GYE042A87, works OK), same pinout, driver library can be swapped directly.
 * **Audio**: ES8311 audio codec + external Class-D amplifier + onboard speaker, plus an LMD4737 PDM digital microphone
 * **Environment sensor**: AHT20 temperature/humidity sensor with independent power switch
 * **Wireless extension**: Header for **SX126x** family LoRa modules (shares SPI bus with the SD card) (optional)

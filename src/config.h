@@ -2,7 +2,16 @@
 
 // ─── Firmware version ────────────────────────────────────────────────────────
 #define FW_VERSION  "v1.4.05"
+
+#ifndef NM_EPD_420_BW
+#define NM_EPD_420_BW 0
+#endif
+
+#if NM_EPD_420_BW
+#define BOARD_NAME  "NM-EPD-420-BW"
+#else
 #define BOARD_NAME  "NM-EPD-420"
+#endif
 
 // ─── EPD (SPI0 / VSPI) ───────────────────────────────────────────────────────
 #define PIN_EPD_SCK   2

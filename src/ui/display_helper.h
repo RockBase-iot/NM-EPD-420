@@ -5,9 +5,14 @@
 #ifndef ENABLE_GxEPD2_GFX
 #define ENABLE_GxEPD2_GFX 1
 #endif
+#if NM_EPD_420_BW
+#include <GxEPD2_BW.h>
+#include <other/GxEPD2_420_GYE042A87.h>
+#else
 #include <GxEPD2_3C.h>
-#include <GxEPD2_GFX.h>
 #include <gdey3c/GxEPD2_420c_GDEY042Z98.h>
+#endif
+#include <GxEPD2_GFX.h>
 #include <driver/gpio.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -17,10 +22,16 @@
 #include <Fonts/FreeMono9pt7b.h>
 
 #include "config.h"
+#if !NM_EPD_420_BW
 #include "epd_uc8179_420c.h"
+#endif
 
+#if NM_EPD_420_BW
+using BwDisplay      = GxEPD2_BW<GxEPD2_420_GYE042A87, EPD_PAGE_HEIGHT>;
+#else
 using Ssd1683Display = GxEPD2_3C<GxEPD2_420c_GDEY042Z98, EPD_PAGE_HEIGHT>;
 using Uc8179Display  = GxEPD2_3C<GxEPD2_420c_NM_UC8179, EPD_PAGE_HEIGHT>;
+#endif
 using EpdDisplay     = GxEPD2_GFX;
 
 static constexpr int16_t DISP_W = 400;
@@ -42,6 +53,10 @@ public:
     }
 
     void showWelcome() {
+#if NM_EPD_420_BW
+        _renderWelcomeInternal(false);
+        return;
+#else
         const bool validateBusy = (EPD_DRIVER_MODE == 2) && !_autoValidated;
         if (_renderWelcomeInternal(validateBusy)) {
             _autoValidated = true;
@@ -58,6 +73,7 @@ public:
         _autoValidated = true;
         _renderWelcomeInternal(false);
 #endif
+    #endif
     }
 
     void showTestScreen(
@@ -97,10 +113,22 @@ public:
     void hibernate() { raw().hibernate(); }
 
     EpdDisplay& raw() { return *_active; }
+#if NM_EPD_420_BW
+    bool isUc8179() const { return false; }
+#else
     bool isUc8179() const { return _isUc8179; }
+#endif
     static bool isPanelBusy() { return digitalRead(PIN_EPD_BUSY) == s_busyActiveLevel; }
 
 private:
+#if NM_EPD_420_BW
+    GxEPD2_420_GYE042A87 _bwDriver{
+        PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY
+    };
+    BwDisplay   _bw{_bwDriver};
+    EpdDisplay* _active = &_bw;
+    bool        _autoValidated = true;
+#else
     GxEPD2_420c_GDEY042Z98 _ssd1683Driver{
         PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY
     };
@@ -112,6 +140,7 @@ private:
     EpdDisplay*    _active = &_ssd1683;
     bool           _isUc8179 = false;
     bool           _autoValidated = false;
+#endif
 
     struct BusyProbe {
         volatile bool run = false;
@@ -144,12 +173,22 @@ private:
     void _initActive(bool initialPowerOn) {
         _primeControlPins();
         _active->init(115200, initialPowerOn, 2, false);
+    #if NM_EPD_420_BW
+        _active->epd2.selectFastFullUpdate(EPD_FAST_FULL_UPDATE != 0);
+    #else
         _active->epd2.selectFastFullUpdate(_isUc8179 ? false : (EPD_FAST_FULL_UPDATE != 0));
+    #endif
         _active->setRotation(0);
     }
 
     void _selectDriver() {
         gpio_hold_dis((gpio_num_t)PIN_EPD_RST);
+    #if NM_EPD_420_BW
+        _active = static_cast<EpdDisplay*>(&_bw);
+        s_busyActiveLevel = HIGH;
+        _autoValidated = true;
+        Serial.println("[EPDDetect] mode=BW_GYE042A87");
+    #else
 #if EPD_DRIVER_MODE == 2
         _isUc8179 = _detectIsUc8179();
         Serial.printf("[EPDDetect] mode=AUTO select=%s\n", _isUc8179 ? "UC8179" : "SSD1683");
@@ -164,9 +203,11 @@ private:
                             : static_cast<EpdDisplay*>(&_ssd1683);
         s_busyActiveLevel = _isUc8179 ? LOW : HIGH;
         _autoValidated = false;
+#endif
         Serial.flush();
     }
 
+#if !NM_EPD_420_BW
     bool _detectIsUc8179() {
         pinMode(PIN_EPD_BUSY, INPUT_PULLUP);
         delay(2);
@@ -198,6 +239,15 @@ private:
                       isUc8179 ? "UC8179" : "SSD1683");
         return isUc8179;
     }
+#endif
+
+    static constexpr uint16_t _accentColor() {
+#if NM_EPD_420_BW
+        return GxEPD_BLACK;
+#else
+        return GxEPD_RED;
+#endif
+    }
 
     bool _renderWelcomeInternal(bool validateBusy) {
         auto& epd = raw();
@@ -206,7 +256,11 @@ private:
 
         if (validateBusy) {
             probe.run = true;
+#if NM_EPD_420_BW
+            probe.activeLevel = HIGH;
+#else
             probe.activeLevel = _isUc8179 ? LOW : HIGH;
+#endif
             xTaskCreatePinnedToCore(_busyProbeTask, "epdBusy", 2048,
                                     &probe, 1, &probeTask, 0);
         }
@@ -236,10 +290,15 @@ private:
 
         probe.run = false;
         delay(5);
+    #if NM_EPD_420_BW
+        Serial.printf("[EPDDetect] validate driver=BW_GYE042A87 activeMs=%lu level=HIGH\n",
+                  (unsigned long)probe.activeMs);
+    #else
         Serial.printf("[EPDDetect] validate driver=%s activeMs=%lu level=%s\n",
                       _isUc8179 ? "UC8179" : "SSD1683",
                       (unsigned long)probe.activeMs,
                       _isUc8179 ? "LOW" : "HIGH");
+    #endif
         return probe.activeMs >= 20;
     }
 
@@ -269,7 +328,7 @@ private:
         snprintf(idx, sizeof(idx), "T%u", (unsigned)testNum);
 
         epd.setFont(&FreeSansBold18pt7b);
-        epd.setTextColor(GxEPD_RED);
+        epd.setTextColor(_accentColor());
         {
             int16_t  x1, y1;
             uint16_t tw, th;
@@ -286,7 +345,7 @@ private:
             int16_t startX = (DISP_W - totalW) / 2;
 
             epd.setFont(&FreeSansBold18pt7b);
-            epd.setTextColor(GxEPD_RED);
+            epd.setTextColor(_accentColor());
             epd.setCursor(startX, 36);
             epd.print(idx);
 
@@ -336,7 +395,7 @@ private:
                     if (failTag) {
                         epd.setTextColor(GxEPD_BLACK);
                         for (const char* p = line; p < failTag; p++) epd.print(*p);
-                        epd.setTextColor(GxEPD_RED);
+                        epd.setTextColor(_accentColor());
                         epd.print("[FAIL]");
                         epd.setTextColor(GxEPD_BLACK);
                         epd.print(failTag + 6);
@@ -359,7 +418,7 @@ private:
             epd.drawLine(10, 244, DISP_W - 10, 244, GxEPD_BLACK);
             bool isGood = (strncmp(result, "PASS", 4) == 0 ||
                            strncmp(result, "SKIP", 4) == 0);
-            epd.setTextColor(isGood ? GxEPD_BLACK : GxEPD_RED);
+            epd.setTextColor(isGood ? GxEPD_BLACK : _accentColor());
             epd.setFont(&FreeSansBold9pt7b);
             char resultLine[24];
             snprintf(resultLine, sizeof(resultLine), "[ %s ]", result);
