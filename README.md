@@ -13,7 +13,7 @@ The **NM-EPD-420** is an **ESP32-S3** based 4.2-inch tri-color E-ink development
 The NM-EPD-420 packs the core resources needed for E-ink projects onto a single board:
 
 * **MCU**: ESP32-S3 (16 MB Flash, PSRAM, dual-core 240 MHz, 2.4 GHz Wi-Fi and BLE 5)
-* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**; Tested black/white E-ink panel (GxEPD2_420_GYE042A87, works OK), same pinout, driver library can be swapped directly.
+* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**; black-and-white E-ink panel (GxEPD2_420_GYE042A87), same pinout, driver library can be swapped directly.
 * **Audio**: ES8311 audio codec + external Class-D amplifier + onboard speaker, plus an LMD4737 PDM digital microphone
 * **Environment sensor**: AHT20 temperature/humidity sensor with independent power switch
 * **Wireless extension**: Header for **SX126x** family LoRa modules (shares SPI bus with the SD card) (optional)
@@ -21,6 +21,22 @@ The NM-EPD-420 packs the core resources needed for E-ink projects onto a single 
 * **Low-power design**: Independent enable pins for each peripheral module allow complete power-down before ESP32 deep sleep
 
 You can run one of the already-supported projects listed below, or treat the NM-EPD-420 as a general ESP32-S3 carrier and start your own application using the pin definitions in this document.
+
+### Display refresh performance
+
+The NM-EPD-420 is available with either the tri-color GDEY042Z98 panel or the black-and-white GYE042A87 panel:
+
+- **GDEY042Z98 tri-color panel**:
+  - **SKU: NM-EPD-420**
+  - Full refresh (black / white / red) takes approximately 10 seconds; partial refresh is not supported.
+  - The tri-color panel provides richer visuals for weather stations, dashboards, and similar applications, but refreshes more slowly and is best suited to mostly static content.
+  - The standard NM-EPD-420 tri-color version does not include a LoRa module and is intended for general desktop applications.
+
+- **GYE042A87 black-and-white panel**:
+  - **SKU: NM-EPD-420-BW**
+  - Full refresh (black / white) takes approximately 2-3 seconds, with partial refresh supported in approximately 1 second.
+  - The black-and-white panel is recommended for applications that need faster content updates.
+  - The NM-EPD-420-BW version is suitable for fast-refresh applications and includes LoRa support by default, making it suitable for indoor desktop LoRa nodes.
 
 ---
 
@@ -35,6 +51,7 @@ The following projects have been ported to the NM-EPD-420. Clone the linked bran
 | **Biscuit** | Multi-purpose tool / entertainment firmware for E-ink devices | [RockBase-iot/biscuit@`master`](https://github.com/RockBase-iot/biscuit/tree/master) |
 | **ESP32-weather-epd** | Low-power weather station; fetches data from OpenWeatherMap and displays it on E-ink | [RockBase-iot/esp32-weather-epd@`main`](https://github.com/RockBase-iot/esp32-weather-epd/tree/main) |
 | **ESP32-Dashboard** | Multi-function E-ink dashboard: weather, air quality, indoor T/RH, Web config portal, etc. | [RockBase-iot/ESP32-Dashboard@`main`](https://github.com/RockBase-iot/ESP32-Dashboard/tree/main) |
+| **MeshCore** | Lightweight, low-power LoRa gateway firmware | [RockBase-iot/meshcore-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshcore-firmware/tree/nm-epd-420) |
 
 **Application firmware for the related projects is already available on [RockBase IoT Web Flash](https://flash.rockbaseiot.com).**
 
@@ -118,9 +135,11 @@ The following projects have been ported to the NM-EPD-420. Clone the linked bran
 |                 | ADC EN           | 43   | OUT       | Battery ADC circuit enable (HIGH = on)  |
 | Battery ADC     | BATT_ADC         | 3    | IN        | Battery voltage sense (resistor divider)|
 
+*Note: Applications may use different peripherals. Control unused peripherals through their enable pins to optimize power consumption.*
+
 ![Two Version interfaces](image/nm_epd_420_interfaces_compare.png)
 
-The LoRa version with HT-RA62 module (SX1262), which can be used for Meshtastic, MeshCore, and other LoRa applications. The No LoRa version is without the module, which can be used for general applications.
+The LoRa version includes an HT-RA62 module (SX1262) for Meshtastic, MeshCore, and other LoRa applications. The no-LoRa version does not include the module and is intended for general applications. The NM-EPD-420-BW version supports LoRa by default so LoRa applications can benefit from its faster display refresh.
 
 ![LoRa Version interfaces](image/nm_epd_420_interfaces_lora.png)
 
@@ -218,14 +237,14 @@ Typical serial output during a run:
 This board is essentially a fully-featured ESP32-S3 carrier. To start your own project:
 
 1. Pick one of the already-supported projects from [Section 2](#2-already-supported-open-source-projects) and clone the corresponding branch, or create a fresh PlatformIO / Arduino project.
-2. Copy the pin configuration below into your project's `config.h` or `platformio.ini`.
+2. Copy the pin configuration below into your project's `config.h` or `platformio.ini`. For PlatformIO projects, see the `codes` directory; `nm_epd_420.json` already defines the board pin mapping and can be referenced directly.
 3. Initialize the SPI / I²C / I²S buses as needed. Remember: **EPD uses FSPI, SD + LoRa share HSPI**.
 4. Drive the corresponding module-enable pin HIGH before using a peripheral, and LOW afterwards to save power.
 5. Use `esp_deep_sleep_start()` or similar APIs for low-power operation.
 
 ### 5.1 Common peripheral initialization notes
 
-* **E-paper**: Use the `zinggjm/GxEPD2` library with the `GxEPD2_420c_GDEY042Z98` driver; CS=46, DC=4, RST=5, BUSY=6.
+* **E-paper**: Use the `zinggjm/GxEPD2` library with the `GxEPD2_420c_GDEY042Z98` driver for the default tri-color NM-EPD-420 (CS=46, DC=4, RST=5, BUSY=6). For the black-and-white NM-EPD-420-BW, use the `GxEPD2_420_GYE042A87` driver.
 * **AHT20**: Use `Adafruit AHTX0`; I²C SDA=39, SCL=38; set `PIN_TEMP_CTL(40)` HIGH before reading.
 * **ES8311 / speaker / microphone**: I²C address 0x18, I²S pins as in the table above; drive `PIN_CODEC_EN(44)` and `PIN_PA_CTRL(41)` HIGH before playback.
 * **SD card**: Use the `SD` library + HSPI (SCK=9, MOSI=10, MISO=11, CS=7).

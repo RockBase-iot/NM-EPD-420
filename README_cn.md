@@ -13,7 +13,7 @@
 NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板上：
 
 * **主控**：ESP32-S3（16 MB Flash，PSRAM，双核 240 MHz，支持 2.4 GHz Wi-Fi 与 BLE 5）
-* **显示屏**：4.2" 400×300 三色电子墨水屏（黑 / 白 / 红），型号 **GDEY042Z98**；测试黑白墨水屏（GxEPD2_420_GYE042A87，测试OK），相同引脚定义，驱动库可直接替换。
+* **显示屏**：4.2" 400×300 三色电子墨水屏（黑 / 白 / 红），型号 **GDEY042Z98**；黑白墨水屏（GxEPD2_420_GYE042A87），相同引脚定义，驱动库可直接替换。
 * **音频**：ES8311 音频编解码 + 外部 D 类功放 + 板载喇叭，LMD4737 PDM 数字麦克风
 * **环境传感**：AHT20 温湿度传感器（带独立电源开关）
 * **无线扩展**：预留 SX126x 系列 LoRa 模组接口（与 SD 卡共享 SPI 总线）（可选项）
@@ -21,6 +21,22 @@ NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板
 * **低功耗设计**：各外设模组拥有独立使能引脚，可整体断电后进入 ESP32 深度睡眠
 
 你可以直接运行下方已适配的开源项目，也可以根据本章给出的引脚定义，把 NM-EPD-420 当作一块通用 ESP32-S3 载板，快速启动自己的应用。
+
+屏幕刷新性能说明：
+
+当前NM-EPD-420支持三色墨水屏（GDEY042Z98）和黑白墨水屏（GYE042A87），两者的刷新性能如下：
+
+- **GDEY042Z98 三色墨水屏**：
+  - **SKU： NM-EPD-420**
+  - 全刷（黑/白/红）约 10 秒，不支持局部刷新
+  - 对于天气站，Dashboard等应用而言，三色墨水屏可以提供更丰富的显示效果，但刷新速度较慢，适合静态内容展示。
+  - 默认三色墨水屏版本，NM-EPD-420 版本不支持 LoRa 模块，适合一般的桌面端应用。
+
+- **GYE042A87 黑白墨水屏**：
+  - **SKU： NM-EPD-420-BW**
+  - 全刷（黑/白）约 2-3 秒，支持局部刷新，局部刷新时间约 1 秒
+  - 对于需要快速刷新内容的应用，建议使用黑白墨水屏（GYE042A87）。
+  - 因此，NM-EPD-420-BW 版本的开发板适合需要快速刷新内容的应用场景，默认NM-EPD-420-BW版本也默认支持了LoRa模块，更方面用户应用于室内的桌面端LoRa节点。
 
 ---
 
@@ -35,6 +51,7 @@ NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板
 | **Biscuit** | 面向电子墨水屏设备的多功能工具/娱乐固件 | [RockBase-iot/biscuit@`master`](https://github.com/RockBase-iot/biscuit/tree/master) |
 | **ESP32-weather-epd** | 低功耗天气站，从 OpenWeatherMap 获取天气并在墨水屏展示 | [RockBase-iot/esp32-weather-epd@`main`](https://github.com/RockBase-iot/esp32-weather-epd/tree/main) |
 | **ESP32-Dashboard** | 多功能电子墨水屏 Dashboard：天气、空气质量、室内温湿度、Web 配网等 | [RockBase-iot/ESP32-Dashboard@`main`](https://github.com/RockBase-iot/ESP32-Dashboard/tree/main) |
+| **MeshCore** | 基于 LoRa 的轻量级低功耗网关固件 | [RockBase-iot/meshcore-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshcore-firmware/tree/nm-epd-420) |
 
 **相关项目应用代码已经可以在 [RockBase IoT Web Flash](https://flash.rockbaseiot.com) 获取。**
 
@@ -118,9 +135,12 @@ NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板
 |                 | ADC EN           | 43   | OUT  | 电池 ADC 电路使能（HIGH 使能）            |
 | 电池 ADC        | BATT_ADC         | 3    | IN   | 电池分压采样输入                          |
 
+
+*提示：对于不用的应用而言，可能对传感器的使用不同，可以通过相关使能引脚进行控制，以达到更好的功耗优化效果。*
+
 ![Two Version interfaces](image/nm_epd_420_interfaces_compare.png)
 
-The LoRa version with HT-RA62 module (SX1262), which can be used for Meshtastic, MeshCore, and other LoRa applications. The No LoRa version is without the module, which can be used for general applications.
+LoRa版本带有HT-RA62模块（SX1262），可用于Meshtastic、MeshCore等LoRa应用。无LoRa版本不带模块，可用于一般应用。默认NM-EPD-420-BW版本支持LoRa模块，以便相关LoRa应用可以实现较好的屏幕刷新效果。
 
 ![LoRa Version interfaces](image/nm_epd_420_interfaces_lora.png)
 
@@ -218,14 +238,14 @@ pio device monitor --baud 115200                           # 串口
 这张开发板本质上是一块外设齐全的 ESP32-S3 载板。你可以：
 
 1. 从 [第 2 章](#2-已支持的开源项目) 挑选一个已适配项目，直接拉取对应分支编译；
-2. 新建自己的 PlatformIO / Arduino 工程，把下方引脚配置复制到项目的 `config.h` 或 `platformio.ini`；
+2. 新建自己的 PlatformIO / Arduino 工程，把下方引脚配置复制到项目的 `config.h` 或 `platformio.ini`；若使用Platformio可以参考codes目录，`nm_epd_420.json`文件中已经定义了相关的引脚映射，直接引用即可；
 3. 按需初始化 SPI / I²C / I²S 总线，注意 **EPD 独占 FSPI，SD + LoRa 共享 HSPI**；
 4. 使用各外设前，先拉高对应的模块使能引脚，使用完毕拉低以节省功耗；
 5. 调用 `esp_deep_sleep_start()` 等 API 进入低功耗模式。
 
 ### 5.1 常用外设初始化要点
 
-* **墨水屏**：推荐 `zinggjm/GxEPD2` 库，使用 `GxEPD2_420c_GDEY042Z98` 驱动；CS=46, DC=4, RST=5, BUSY=6。
+* **墨水屏**：推荐 `zinggjm/GxEPD2` 库，使用 `GxEPD2_420c_GDEY042Z98` 驱动（默认三色NM-EPD-420），CS=46, DC=4, RST=5, BUSY=6。若为黑白屏（NM-EPD-420-BW），使用 `GxEPD2_420_GYE042A87` 驱动即可。
 * **AHT20**：使用 `Adafruit AHTX0`；I²C SDA=39, SCL=38；读取前将 `PIN_TEMP_CTL(40)` 置高。
 * **ES8311 / 喇叭 / 麦克风**：I²C 地址 0x18，I²S 引脚见上表；播放前拉高 `PIN_CODEC_EN(44)` 和 `PIN_PA_CTRL(41)`。
 * **SD 卡**：使用 `SD` 库 + HSPI（SCK=9, MOSI=10, MISO=11, CS=7）。
