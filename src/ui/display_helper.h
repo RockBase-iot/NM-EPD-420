@@ -1,11 +1,15 @@
 #pragma once
 
 #include <Arduino.h>
+#include "config.h"
 #include <SPI.h>
 #ifndef ENABLE_GxEPD2_GFX
 #define ENABLE_GxEPD2_GFX 1
 #endif
-#if NM_EPD_420_BW
+#if NM_EPD_420_4C
+#include <GxEPD2_4C.h>
+#include <epd4c/GxEPD2_420c_GDEY0420F51.h>
+#elif NM_EPD_420_BW
 #include <GxEPD2_BW.h>
 #include <other/GxEPD2_420_GYE042A87.h>
 #else
@@ -21,12 +25,13 @@
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeMono9pt7b.h>
 
-#include "config.h"
-#if !NM_EPD_420_BW
+#if !NM_EPD_420_BW && !NM_EPD_420_4C
 #include "epd_uc8179_420c.h"
 #endif
 
-#if NM_EPD_420_BW
+#if NM_EPD_420_4C
+using FourColorDisplay = GxEPD2_4C<GxEPD2_420c_GDEY0420F51, EPD_PAGE_HEIGHT>;
+#elif NM_EPD_420_BW
 using BwDisplay      = GxEPD2_BW<GxEPD2_420_GYE042A87, EPD_PAGE_HEIGHT>;
 #else
 using Ssd1683Display = GxEPD2_3C<GxEPD2_420c_GDEY042Z98, EPD_PAGE_HEIGHT>;
@@ -53,7 +58,7 @@ public:
     }
 
     void showWelcome() {
-#if NM_EPD_420_BW
+#if NM_EPD_420_BW || NM_EPD_420_4C
         _renderWelcomeInternal(false);
         return;
 #else
@@ -88,12 +93,14 @@ public:
     {
         auto& epd = raw();
         epd.setFullWindow();
+        const uint32_t refreshStartedAt = millis();
         epd.firstPage();
         do {
             epd.fillScreen(GxEPD_WHITE);
             _drawTestContent(testNum, title, lines, lineCount, result, prompt,
                              linesLeftAlignedBlock, monospaceStartLine);
         } while (epd.nextPage());
+        _logRefreshTime("test screen", refreshStartedAt);
     }
 
     void showTestRunning(uint8_t testNum, const char* title,
@@ -113,7 +120,7 @@ public:
     void hibernate() { raw().hibernate(); }
 
     EpdDisplay& raw() { return *_active; }
-#if NM_EPD_420_BW
+#if NM_EPD_420_BW || NM_EPD_420_4C
     bool isUc8179() const { return false; }
 #else
     bool isUc8179() const { return _isUc8179; }
@@ -121,7 +128,24 @@ public:
     static bool isPanelBusy() { return digitalRead(PIN_EPD_BUSY) == s_busyActiveLevel; }
 
 private:
-#if NM_EPD_420_BW
+    static void _logRefreshTime(const char* screenName, uint32_t refreshStartedAt) {
+#if NM_EPD_420_4C
+        Serial.printf("[EPD] %s refresh: %lu ms\n", screenName,
+                      (unsigned long)(millis() - refreshStartedAt));
+#else
+        (void)screenName;
+        (void)refreshStartedAt;
+#endif
+    }
+
+#if NM_EPD_420_4C
+    GxEPD2_420c_GDEY0420F51 _fourColorDriver{
+        PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY
+    };
+    FourColorDisplay _fourColor{_fourColorDriver};
+    EpdDisplay*      _active = &_fourColor;
+    bool             _autoValidated = true;
+#elif NM_EPD_420_BW
     GxEPD2_420_GYE042A87 _bwDriver{
         PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY
     };
@@ -175,7 +199,7 @@ private:
         _active->init(115200, initialPowerOn, 2, false);
     #if NM_EPD_420_BW
         _active->epd2.selectFastFullUpdate(EPD_FAST_FULL_UPDATE != 0);
-    #else
+    #elif !NM_EPD_420_4C
         _active->epd2.selectFastFullUpdate(_isUc8179 ? false : (EPD_FAST_FULL_UPDATE != 0));
     #endif
         _active->setRotation(0);
@@ -183,7 +207,12 @@ private:
 
     void _selectDriver() {
         gpio_hold_dis((gpio_num_t)PIN_EPD_RST);
-    #if NM_EPD_420_BW
+    #if NM_EPD_420_4C
+        _active = static_cast<EpdDisplay*>(&_fourColor);
+        s_busyActiveLevel = LOW;
+        _autoValidated = true;
+        Serial.println("[EPDDetect] mode=4C_GDEY0420F51_HX8717");
+    #elif NM_EPD_420_BW
         _active = static_cast<EpdDisplay*>(&_bw);
         s_busyActiveLevel = HIGH;
         _autoValidated = true;
@@ -207,7 +236,7 @@ private:
         Serial.flush();
     }
 
-#if !NM_EPD_420_BW
+#if !NM_EPD_420_BW && !NM_EPD_420_4C
     bool _detectIsUc8179() {
         pinMode(PIN_EPD_BUSY, INPUT_PULLUP);
         delay(2);
@@ -244,6 +273,8 @@ private:
     static constexpr uint16_t _accentColor() {
 #if NM_EPD_420_BW
         return GxEPD_BLACK;
+#elif NM_EPD_420_4C
+    return GxEPD_YELLOW;
 #else
         return GxEPD_RED;
 #endif
@@ -258,6 +289,8 @@ private:
             probe.run = true;
 #if NM_EPD_420_BW
             probe.activeLevel = HIGH;
+#elif NM_EPD_420_4C
+            probe.activeLevel = LOW;
 #else
             probe.activeLevel = _isUc8179 ? LOW : HIGH;
 #endif
@@ -266,6 +299,7 @@ private:
         }
 
         epd.setFullWindow();
+    const uint32_t refreshStartedAt = millis();
         epd.firstPage();
         do {
             epd.fillScreen(GxEPD_WHITE);
@@ -283,6 +317,7 @@ private:
             epd.setFont(&FreeSansBold9pt7b);
             _printCentered("Press USER button to Start", 170);
         } while (epd.nextPage());
+        _logRefreshTime("welcome screen", refreshStartedAt);
 
         if (!validateBusy) {
             return true;
@@ -292,6 +327,9 @@ private:
         delay(5);
     #if NM_EPD_420_BW
         Serial.printf("[EPDDetect] validate driver=BW_GYE042A87 activeMs=%lu level=HIGH\n",
+                  (unsigned long)probe.activeMs);
+    #elif NM_EPD_420_4C
+        Serial.printf("[EPDDetect] validate driver=4C_GDEY0420F51 activeMs=%lu level=LOW\n",
                   (unsigned long)probe.activeMs);
     #else
         Serial.printf("[EPDDetect] validate driver=%s activeMs=%lu level=%s\n",

@@ -7,7 +7,13 @@
 #define NM_EPD_420_BW 0
 #endif
 
-#if NM_EPD_420_BW
+#ifndef NM_EPD_420_4C
+#define NM_EPD_420_4C 0
+#endif
+
+#if NM_EPD_420_4C
+#define BOARD_NAME  "NM-EPD-420-4C"
+#elif NM_EPD_420_BW
 #define BOARD_NAME  "NM-EPD-420-BW"
 #else
 #define BOARD_NAME  "NM-EPD-420"

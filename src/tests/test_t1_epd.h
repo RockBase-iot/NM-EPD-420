@@ -1,5 +1,5 @@
 ﻿#pragma once
-// T1 鈥?EPD 3-color display test
+// T1 - EPD display test
 
 #include "test_runner.h"
 #include "config.h"
@@ -10,19 +10,29 @@
 static constexpr uint16_t T1_ACCENT_COLOR = GxEPD_BLACK;
 static constexpr uint16_t T1_THIRD_ROUND_COLOR = GxEPD_BLACK;
 static constexpr const char* T1_THIRD_ROUND_LABEL = "BLACK (repeat)";
+static constexpr uint8_t T1_ROUND_COUNT = 4;
+#elif NM_EPD_420_4C
+static constexpr uint16_t T1_ACCENT_COLOR = GxEPD_YELLOW;
+static constexpr uint16_t T1_THIRD_ROUND_COLOR = GxEPD_RED;
+static constexpr const char* T1_THIRD_ROUND_LABEL = "RED";
+static constexpr uint8_t T1_ROUND_COUNT = 5;
 #else
 static constexpr uint16_t T1_ACCENT_COLOR = GxEPD_RED;
 static constexpr uint16_t T1_THIRD_ROUND_COLOR = GxEPD_RED;
 static constexpr const char* T1_THIRD_ROUND_LABEL = "RED";
+static constexpr uint8_t T1_ROUND_COUNT = 4;
 #endif
 
-// 鈹€鈹€鈹€ BUSY-pin sanity sampler 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-// During an EPD refresh the panel drives BUSY HIGH for several seconds.
+#if NM_EPD_420_4C
+static constexpr uint32_t T1_REFRESH_OBSERVATION_MS = 5000;
+#endif
+
+// During an EPD refresh the panel drives BUSY at its driver-specific active level.
 // Polling BUSY from the main thread is unreliable because GxEPD2's
 // firstPage()/nextPage() blocks inside its own _waitWhileBusy(). We spawn
 // a 1 ms sampler task pinned to core 0 that just records whether it ever
-// observed BUSY=HIGH and the total HIGH duration. If after a full refresh
-// the sampler saw 0 ms HIGH, the BUSY net is broken (e.g. virtual solder
+// observed BUSY active and the total active duration. If after a full refresh
+// the sampler saw 0 ms active, the BUSY net is broken (e.g. virtual solder
 // joint on the MCU side).
 struct _T1BusyMon {
     volatile bool      run;
@@ -36,7 +46,7 @@ static void _t1_busyMonTask(void* arg) {
     auto* m = static_cast<_T1BusyMon*>(arg);
     pinMode(PIN_EPD_BUSY, INPUT);
     while (m->run) {
-        if (digitalRead(PIN_EPD_BUSY) == HIGH) {
+        if (Display::isPanelBusy()) {
             m->sawHigh = true;
             m->highMs += 1;
         }
@@ -57,7 +67,7 @@ static void _t1_busyMonStop() {
     delay(5);
 }
 
-// 鈹€鈹€鈹€ Helper: center-print a string at given baseline y using raw EPD 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// Helper: center-print a string at a given baseline Y using raw EPD.
 static void _t1_printCentered(EpdDisplay& epd, const char* str, int16_t y) {
     int16_t  x1, y1;
     uint16_t w, h;
@@ -66,7 +76,7 @@ static void _t1_printCentered(EpdDisplay& epd, const char* str, int16_t y) {
     epd.print(str);
 }
 
-// 鈹€鈹€鈹€ Helper: solid color fill with contrasting prompt overlay 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// Helper: solid color fill with contrasting prompt overlay.
 // bgColor   : fill color (GxEPD_WHITE / GxEPD_BLACK / GxEPD_RED)
 // textColor : contrasting text color
 // roundLabel: e.g. "Round 1/4 : Full WHITE fill"
@@ -76,6 +86,7 @@ static void _t1_colorRound(Display& disp,
                             const char* roundLabel, const char* prompt) {
     auto& epd = disp.raw();
     epd.setFullWindow();
+    const uint32_t refreshStartedAt = millis();
     epd.firstPage();
     do {
         epd.fillScreen(bgColor);
@@ -90,17 +101,25 @@ static void _t1_colorRound(Display& disp,
         epd.setFont(&FreeSans9pt7b);
         _t1_printCentered(epd, prompt, 289);
     } while (epd.nextPage());
+#if NM_EPD_420_4C
+    Serial.printf("[T1] %s refresh: %lu ms\n", roundLabel,
+                  (unsigned long)(millis() - refreshStartedAt));
+    Serial.printf("[T1] Holding image for %lu ms before verdict\n",
+                  (unsigned long)T1_REFRESH_OBSERVATION_MS);
+    delay(T1_REFRESH_OBSERVATION_MS);
+#endif
 }
 
-// 鈹€鈹€鈹€ Helper: text demo screen (Round 4) 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// Helper: text demo screen (final round).
 static void _t1_textDemo(Display& disp) {
     auto& epd = disp.raw();
     epd.setFullWindow();
+    const uint32_t refreshStartedAt = millis();
     epd.firstPage();
     do {
         epd.fillScreen(GxEPD_WHITE);
 
-        // 鈹€鈹€ Title row 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // Title row
         epd.setFont(&FreeSansBold18pt7b);
         epd.setTextColor(T1_ACCENT_COLOR);
         _t1_printCentered(epd, "T1", 36);
@@ -111,36 +130,44 @@ static void _t1_textDemo(Display& disp) {
 
         epd.drawLine(10, 68, 390, 68, GxEPD_BLACK);
 
-        // 鈹€鈹€ Font / color samples 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-        // Bold BLACK 鈥?large
+        // Font / color samples
+        // Bold BLACK - large
         epd.setFont(&FreeSansBold18pt7b);
         epd.setTextColor(GxEPD_BLACK);
         _t1_printCentered(epd, "Bold Black Large", 110);
 
-        // Normal BLACK 鈥?small
+        // Normal BLACK - small
         epd.setFont(&FreeSans9pt7b);
         epd.setTextColor(GxEPD_BLACK);
         _t1_printCentered(epd, "Normal black small  0123456789", 140);
 
-        // Bold RED 鈥?large
+        // Colored large sample
         epd.setFont(&FreeSansBold18pt7b);
-        epd.setTextColor(T1_ACCENT_COLOR);
     #if NM_EPD_420_BW
+        epd.setTextColor(T1_ACCENT_COLOR);
         _t1_printCentered(epd, "Bold black (accent) large", 180);
+    #elif NM_EPD_420_4C
+        epd.setTextColor(GxEPD_RED);
+        _t1_printCentered(epd, "Bold red large", 180);
     #else
+        epd.setTextColor(T1_ACCENT_COLOR);
         _t1_printCentered(epd, "Bold Red Large", 180);
     #endif
 
-        // Normal RED 鈥?small
+        // Colored small sample
         epd.setFont(&FreeSans9pt7b);
-        epd.setTextColor(T1_ACCENT_COLOR);
     #if NM_EPD_420_BW
+        epd.setTextColor(T1_ACCENT_COLOR);
         _t1_printCentered(epd, "Normal black small  !@#$%^&*()", 210);
+    #elif NM_EPD_420_4C
+        epd.setTextColor(GxEPD_YELLOW);
+        _t1_printCentered(epd, "Normal yellow small  !@#$%^&*()", 210);
     #else
+        epd.setTextColor(T1_ACCENT_COLOR);
         _t1_printCentered(epd, "Normal red small  !@#$%^&*()", 210);
     #endif
 
-        // 鈹€鈹€ Verdict prompt 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+        // Verdict prompt
         epd.drawLine(10, 245, 390, 245, GxEPD_BLACK);
         epd.setFont(&FreeSansBold9pt7b);
         epd.setTextColor(GxEPD_BLACK);
@@ -152,29 +179,44 @@ static void _t1_textDemo(Display& disp) {
         epd.setFont(&FreeSans9pt7b);
         _t1_printCentered(epd, "USER = PASS       BOOT = FAIL", 285);
     } while (epd.nextPage());
+#if NM_EPD_420_4C
+    Serial.printf("[T1] Text demo refresh: %lu ms\n",
+                  (unsigned long)(millis() - refreshStartedAt));
+    Serial.printf("[T1] Holding image for %lu ms before verdict\n",
+                  (unsigned long)T1_REFRESH_OBSERVATION_MS);
+    delay(T1_REFRESH_OBSERVATION_MS);
+#endif
 }
 
-// 鈹€鈹€鈹€ T1 implementation 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+// T1 implementation
 inline TestResult runTestT1(Display& disp, TestRunner& runner) {
 
     Serial.println("[T1] EPD Display Test started");
 #if NM_EPD_420_BW
     Serial.println("[T1] Round 1: WHITE fill  Round 2: BLACK fill  Round 3: BLACK fill(repeat)  Round 4: Text demo");
+#elif NM_EPD_420_4C
+    Serial.println("[T1] Round 1: WHITE fill  Round 2: BLACK fill  Round 3: RED fill  Round 4: YELLOW fill  Round 5: Text demo");
 #else
     Serial.println("[T1] Round 1: WHITE fill  Round 2: BLACK fill  Round 3: RED fill  Round 4: Text demo");
 #endif
 
-    // 鈹€鈹€ Round 1: WHITE 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+    // Round 1: WHITE
     // We piggyback a BUSY-pin self-check on this round: a 1 ms sampler
-    // task records whether GPIO6 ever goes HIGH during the refresh. If
+    // task records whether GPIO6 ever goes active during the refresh. If
     // not, the BUSY net is broken (typical cause: virtual solder joint
     // on the MCU side) and the rest of T1 would run blind, so we fail
     // immediately with an explicit message.
-    Serial.println("[T1] Round 1/4 - Filling screen WHITE ...");
+    Serial.printf("[T1] Round 1/%u - Filling screen WHITE ...\n", T1_ROUND_COUNT);
     _t1_busyMonStart();
+#if NM_EPD_420_4C
+    _t1_colorRound(disp, GxEPD_WHITE, GxEPD_BLACK,
+                   "Round 1/5 : Full WHITE fill",
+                   "USER = OK       BOOT = FAIL");
+#else
     _t1_colorRound(disp, GxEPD_WHITE, GxEPD_BLACK,
                    "Round 1/4 : Full WHITE fill",
                    "USER = OK       BOOT = FAIL");
+#endif
     _t1_busyMonStop();
     Serial.printf("[T1] BUSY self-check: sawHigh=%d  highMs=%lu\n",
                   (int)_t1_busyMon.sawHigh,
@@ -209,11 +251,17 @@ inline TestResult runTestT1(Display& disp, TestRunner& runner) {
     Serial.println("[T1] <<< verdict received: OK");
     Serial.println("[T1] Round 1 WHITE: OK");
 
-    // 鈹€鈹€ Round 2: BLACK 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-    Serial.println("[T1] Round 2/4 - Filling screen BLACK ...");
+    // Round 2: BLACK
+    Serial.printf("[T1] Round 2/%u - Filling screen BLACK ...\n", T1_ROUND_COUNT);
+#if NM_EPD_420_4C
+    _t1_colorRound(disp, GxEPD_BLACK, GxEPD_WHITE,
+                   "Round 2/5 : Full BLACK fill",
+                   "USER = OK       BOOT = FAIL");
+#else
     _t1_colorRound(disp, GxEPD_BLACK, GxEPD_WHITE,
                    "Round 2/4 : Full BLACK fill",
                    "USER = OK       BOOT = FAIL");
+#endif
     Serial.println("[T1] BLACK fill shown. Screen should be all black.");
     Serial.println("[T1] >>> waiting for verdict (USER=OK  BOOT=FAIL)");
     if (!runner.waitForVerdict()) {
@@ -229,11 +277,15 @@ inline TestResult runTestT1(Display& disp, TestRunner& runner) {
     Serial.println("[T1] <<< verdict received: OK");
     Serial.println("[T1] Round 2 BLACK: OK");
 
-    // 鈹€鈹€ Round 3: RED 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
-    Serial.printf("[T1] Round 3/4 - Filling screen %s ...\n", T1_THIRD_ROUND_LABEL);
+    // Round 3: RED
+    Serial.printf("[T1] Round 3/%u - Filling screen %s ...\n", T1_ROUND_COUNT, T1_THIRD_ROUND_LABEL);
 #if NM_EPD_420_BW
     _t1_colorRound(disp, T1_THIRD_ROUND_COLOR, GxEPD_WHITE,
                    "Round 3/4 : Full BLACK fill (repeat)",
+                   "USER = OK       BOOT = FAIL");
+#elif NM_EPD_420_4C
+    _t1_colorRound(disp, T1_THIRD_ROUND_COLOR, GxEPD_BLACK,
+                   "Round 3/5 : Full RED fill",
                    "USER = OK       BOOT = FAIL");
 #else
     _t1_colorRound(disp, T1_THIRD_ROUND_COLOR, GxEPD_BLACK,
@@ -268,11 +320,38 @@ inline TestResult runTestT1(Display& disp, TestRunner& runner) {
     Serial.println("[T1] Round 3 RED: OK");
 #endif
 
-    // 鈹€鈹€ Round 4: Text rendering 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
+#if NM_EPD_420_4C
+    Serial.println("[T1] Round 4/5 - Filling screen YELLOW ...");
+    _t1_colorRound(disp, GxEPD_YELLOW, GxEPD_BLACK,
+                   "Round 4/5 : Full YELLOW fill",
+                   "USER = OK       BOOT = FAIL");
+    Serial.println("[T1] YELLOW fill shown. Screen should be all yellow.");
+    Serial.println("[T1] >>> waiting for verdict (USER=OK  BOOT=FAIL)");
+    if (!runner.waitForVerdict()) {
+        Serial.println("[T1] <<< verdict received: FAIL");
+        Serial.println("[T1] FAIL - YELLOW fill rejected by operator");
+        static const char* failMsg[] = { "YELLOW fill FAILED", "Press USER button to continue" };
+        disp.showTestScreen(1, "EPD Display Test", failMsg, 2, "FAIL", "USER=Next test");
+        Serial.println("[T1] >>> waiting for USER to continue");
+        runner.waitForUser();
+        Serial.println("[T1] <<< USER received, moving on");
+        return TestResult::FAIL;
+    }
+    Serial.println("[T1] <<< verdict received: OK");
+    Serial.println("[T1] Round 4 YELLOW: OK");
+#endif
+
+    // Final round: text rendering
+#if NM_EPD_420_4C
+    Serial.println("[T1] Round 5/5 - Text rendering demo screen ...");
+#else
     Serial.println("[T1] Round 4/4 - Text rendering demo screen ...");
+#endif
     _t1_textDemo(disp);
 #if NM_EPD_420_BW
     Serial.println("[T1] Text demo shown: Bold/Normal in black/white mode.");
+#elif NM_EPD_420_4C
+    Serial.println("[T1] Text demo shown: Black, red, and yellow samples.");
 #else
     Serial.println("[T1] Text demo shown: Bold/Normal x Black/Red.");
 #endif

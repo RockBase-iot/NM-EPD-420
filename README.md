@@ -13,7 +13,7 @@ The **NM-EPD-420** is an **ESP32-S3** based 4.2-inch tri-color E-ink development
 The NM-EPD-420 packs the core resources needed for E-ink projects onto a single board:
 
 * **MCU**: ESP32-S3 (16 MB Flash, PSRAM, dual-core 240 MHz, 2.4 GHz Wi-Fi and BLE 5)
-* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**; black-and-white E-ink panel (GxEPD2_420_GYE042A87), same pinout, driver library can be swapped directly.
+* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**; black-and-white E-ink panel (GxEPD2_420_GYE042A87); and a candidate four-color panel (black / white / red / yellow, GxEPD2_420c_GDEY0420F51 / HX8717). They use the same pins, but require matching controller protocols.
 * **Audio**: ES8311 audio codec + external Class-D amplifier + onboard speaker, plus an LMD4737 PDM digital microphone
 * **Environment sensor**: AHT20 temperature/humidity sensor with independent power switch
 * **Wireless extension**: Header for **SX126x** family LoRa modules (shares SPI bus with the SD card) (optional)
@@ -24,7 +24,7 @@ You can run one of the already-supported projects listed below, or treat the NM-
 
 ### Display refresh performance
 
-The NM-EPD-420 is available with either the tri-color GDEY042Z98 panel or the black-and-white GYE042A87 panel:
+The NM-EPD-420 currently supports the tri-color GDEY042Z98 panel, the black-and-white GYE042A87 panel, and the four-color GDEY0420F51 panel. Their refresh characteristics are as follows:
 
 - **GDEY042Z98 tri-color panel**:
   - **SKU: NM-EPD-420**
@@ -37,6 +37,13 @@ The NM-EPD-420 is available with either the tri-color GDEY042Z98 panel or the bl
   - Full refresh (black / white) takes approximately 2-3 seconds, with partial refresh supported in approximately 1 second.
   - The black-and-white panel is recommended for applications that need faster content updates.
   - The NM-EPD-420-BW version is suitable for fast-refresh applications and includes LoRa support by default, making it suitable for indoor desktop LoRa nodes.
+
+- **GDEY0420F51 four-color panel**:
+  - **SKU: NM-EPD-420-4C**
+  - Full refresh (black / white / red / yellow) takes approximately 25-30 seconds; partial refresh is not supported.
+  - The four-color panel is recommended for applications that need more colors and do not require frequent updates.
+  - **Build environment: `nm-epd-420-4c`**; driver: `GxEPD2_420c_GDEY0420F51` (400×300, black / white / red / yellow).
+  - Build with `pio run -e nm-epd-420-4c`; T1 checks white, black, red, and yellow full-screen fills, then black/red/yellow text.
 
 ---
 
@@ -147,7 +154,7 @@ The LoRa version includes an HT-RA62 module (SX1262) for Meshtastic, MeshCore, a
 
 ### 3.4 Accessories and power
 
-* **3D case**: STL files are in [docs/case](docs/case), including buttons, top plate, back cover, etc.
+* **3D case**: STL files are in [docs/case](docs/case), including buttons, top plate, back cover, etc.; ready for direct 3D printing.
 * **Battery**: A 3.7 V Li-Po battery with protection circuit, capacity ≥ 500 mAh, is recommended. The PCB has a JST 1.25 PH 2-Pin connector (red = positive, black = negative). Recommended size: 603030. [Buy on AliExpress JST 1.25 2Pin 603030 600mAh](https://www.aliexpress.com/item/32853151195.html)
 
 ---
@@ -244,7 +251,7 @@ This board is essentially a fully-featured ESP32-S3 carrier. To start your own p
 
 ### 5.1 Common peripheral initialization notes
 
-* **E-paper**: Use the `zinggjm/GxEPD2` library with the `GxEPD2_420c_GDEY042Z98` driver for the default tri-color NM-EPD-420 (CS=46, DC=4, RST=5, BUSY=6). For the black-and-white NM-EPD-420-BW, use the `GxEPD2_420_GYE042A87` driver.
+* **E-paper**: Use the `zinggjm/GxEPD2` library with `GxEPD2_420c_GDEY042Z98` for the default tri-color NM-EPD-420 and `GxEPD2_420_GYE042A87` for NM-EPD-420-BW. Four-color HX8717 panels use `GxEPD2_420c_GDEY0420F51` through `nm-epd-420-4c`. CS=46, DC=4, RST=5, BUSY=6; the four-color driver uses active-low BUSY.
 * **AHT20**: Use `Adafruit AHTX0`; I²C SDA=39, SCL=38; set `PIN_TEMP_CTL(40)` HIGH before reading.
 * **ES8311 / speaker / microphone**: I²C address 0x18, I²S pins as in the table above; drive `PIN_CODEC_EN(44)` and `PIN_PA_CTRL(41)` HIGH before playback.
 * **SD card**: Use the `SD` library + HSPI (SCK=9, MOSI=10, MISO=11, CS=7).
