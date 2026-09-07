@@ -11,7 +11,13 @@
 #define NM_EPD_420_4C 0
 #endif
 
-#if NM_EPD_420_4C
+#ifndef NM_EPD_075_3C
+#define NM_EPD_075_3C 0
+#endif
+
+#if NM_EPD_075_3C
+#define BOARD_NAME  "NM-EPD-075-3C"
+#elif NM_EPD_420_4C
 #define BOARD_NAME  "NM-EPD-420-4C"
 #elif NM_EPD_420_BW
 #define BOARD_NAME  "NM-EPD-420-BW"
@@ -81,7 +87,11 @@
 // Full-height page buffer reduces paged transfer overhead on ESP32-S3.
 // The selected GDEY042Z98 driver still does full 3-color refresh, so this
 // improves latency moderately but cannot remove the panel's inherent delay.
+#if NM_EPD_075_3C
+#define EPD_PAGE_HEIGHT           480   // 480 = full buffer for 800x480 GxEPD2_750c_Z08
+#else
 #define EPD_PAGE_HEIGHT           300   // 300 = full buffer, 150 = half buffer
+#endif
 #define EPD_FAST_FULL_UPDATE      1     // 1 = use fast full-refresh waveform
 #define EPD_DRIVER_MODE           2     // 0=SSD1683 1=UC8179 2=auto detect
 

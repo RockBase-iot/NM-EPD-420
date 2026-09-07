@@ -72,7 +72,7 @@ static void _t1_printCentered(EpdDisplay& epd, const char* str, int16_t y) {
     int16_t  x1, y1;
     uint16_t w, h;
     epd.getTextBounds(str, 0, y, &x1, &y1, &w, &h);
-    epd.setCursor((400 - (int16_t)w) / 2 - x1, y);
+    epd.setCursor((DISP_W - (int16_t)w) / 2 - x1, y);
     epd.print(str);
 }
 

@@ -13,7 +13,7 @@ The **NM-EPD-420** is an **ESP32-S3** based 4.2-inch tri-color E-ink development
 The NM-EPD-420 packs the core resources needed for E-ink projects onto a single board:
 
 * **MCU**: ESP32-S3 (16 MB Flash, PSRAM, dual-core 240 MHz, 2.4 GHz Wi-Fi and BLE 5)
-* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**; black-and-white E-ink panel (GxEPD2_420_GYE042A87); and a candidate four-color panel (black / white / red / yellow, GxEPD2_420c_GDEY0420F51 / HX8717). They use the same pins, but require matching controller protocols.
+* **Display**: 4.2" 400×300 tri-color E-ink panel (black / white / red), model **GDEY042Z98**; black-and-white E-ink panel (GxEPD2_420_GYE042A87); and a four-color panel (black / white / red / yellow, GxEPD2_420c_GDEY0420F51). All three use the same pin definitions, but the controller protocol must match — select the variant according to the panel actually fitted.
 * **Audio**: ES8311 audio codec + external Class-D amplifier + onboard speaker, plus an LMD4737 PDM digital microphone
 * **Environment sensor**: AHT20 temperature/humidity sensor with independent power switch
 * **Wireless extension**: Header for **SX126x** family LoRa modules (shares SPI bus with the SD card) (optional)
@@ -44,6 +44,9 @@ The NM-EPD-420 currently supports the tri-color GDEY042Z98 panel, the black-and-
   - The four-color panel is recommended for applications that need more colors and do not require frequent updates.
   - **Build environment: `nm-epd-420-4c`**; driver: `GxEPD2_420c_GDEY0420F51` (400×300, black / white / red / yellow).
   - Build with `pio run -e nm-epd-420-4c`; T1 checks white, black, red, and yellow full-screen fills, then black/red/yellow text.
+
+The NM-EPD-420 base board has also been validated with a 7.5-inch tri-color panel (GxEPD2_750c_Z08, GD7965 controller). The test confirmed base-board compatibility and driver feasibility — content refreshes and displays normally.
+*Note: the 7.5-inch panel is not the standard panel shipped with NM-EPD-420 and is used for testing only. For real applications, adjust the case and mechanical structure as needed.*
 
 ---
 
@@ -156,6 +159,12 @@ The LoRa version includes an HT-RA62 module (SX1262) for Meshtastic, MeshCore, a
 
 * **3D case**: STL files are in [docs/case](docs/case), including buttons, top plate, back cover, etc.; ready for direct 3D printing.
 * **Battery**: A 3.7 V Li-Po battery with protection circuit, capacity ≥ 500 mAh, is recommended. The PCB has a JST 1.25 PH 2-Pin connector (red = positive, black = negative). Recommended size: 603030. [Buy on AliExpress JST 1.25 2Pin 603030 600mAh](https://www.aliexpress.com/item/32853151195.html)
+
+### 3.5 7.5-inch tri-color panel extension test
+
+The NM-EPD-420 base board has been validated with a 7.5-inch tri-color panel (GxEPD2_750c_Z08, GD7965 controller), confirming base-board compatibility and driver feasibility. Test results show that content refreshes and displays normally.
+
+![7.5-inch tri-color panel test](image/nm-epd-750-3c.png)
 
 ---
 

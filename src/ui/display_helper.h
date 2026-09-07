@@ -6,7 +6,10 @@
 #ifndef ENABLE_GxEPD2_GFX
 #define ENABLE_GxEPD2_GFX 1
 #endif
-#if NM_EPD_420_4C
+#if NM_EPD_075_3C
+#include <GxEPD2_3C.h>
+#include <epd3c/GxEPD2_750c_Z08.h>
+#elif NM_EPD_420_4C
 #include <GxEPD2_4C.h>
 #include <epd4c/GxEPD2_420c_GDEY0420F51.h>
 #elif NM_EPD_420_BW
@@ -25,11 +28,13 @@
 #include <Fonts/FreeSansBold18pt7b.h>
 #include <Fonts/FreeMono9pt7b.h>
 
-#if !NM_EPD_420_BW && !NM_EPD_420_4C
+#if !NM_EPD_420_BW && !NM_EPD_420_4C && !NM_EPD_075_3C
 #include "epd_uc8179_420c.h"
 #endif
 
-#if NM_EPD_420_4C
+#if NM_EPD_075_3C
+using Panel75Display = GxEPD2_3C<GxEPD2_750c_Z08, EPD_PAGE_HEIGHT>;
+#elif NM_EPD_420_4C
 using FourColorDisplay = GxEPD2_4C<GxEPD2_420c_GDEY0420F51, EPD_PAGE_HEIGHT>;
 #elif NM_EPD_420_BW
 using BwDisplay      = GxEPD2_BW<GxEPD2_420_GYE042A87, EPD_PAGE_HEIGHT>;
@@ -39,8 +44,13 @@ using Uc8179Display  = GxEPD2_3C<GxEPD2_420c_NM_UC8179, EPD_PAGE_HEIGHT>;
 #endif
 using EpdDisplay     = GxEPD2_GFX;
 
+#if NM_EPD_075_3C
+static constexpr int16_t DISP_W = 800;
+static constexpr int16_t DISP_H = 480;
+#else
 static constexpr int16_t DISP_W = 400;
 static constexpr int16_t DISP_H = 300;
+#endif
 
 class Display {
 public:
@@ -58,7 +68,7 @@ public:
     }
 
     void showWelcome() {
-#if NM_EPD_420_BW || NM_EPD_420_4C
+#if NM_EPD_420_BW || NM_EPD_420_4C || NM_EPD_075_3C
         _renderWelcomeInternal(false);
         return;
 #else
@@ -120,7 +130,7 @@ public:
     void hibernate() { raw().hibernate(); }
 
     EpdDisplay& raw() { return *_active; }
-#if NM_EPD_420_BW || NM_EPD_420_4C
+#if NM_EPD_420_BW || NM_EPD_420_4C || NM_EPD_075_3C
     bool isUc8179() const { return false; }
 #else
     bool isUc8179() const { return _isUc8179; }
@@ -138,7 +148,14 @@ private:
 #endif
     }
 
-#if NM_EPD_420_4C
+#if NM_EPD_075_3C
+    GxEPD2_750c_Z08 _panel75Driver{
+        PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY
+    };
+    Panel75Display _panel75{_panel75Driver};
+    EpdDisplay*    _active = &_panel75;
+    bool           _autoValidated = true;
+#elif NM_EPD_420_4C
     GxEPD2_420c_GDEY0420F51 _fourColorDriver{
         PIN_EPD_CS, PIN_EPD_DC, PIN_EPD_RST, PIN_EPD_BUSY
     };
@@ -199,7 +216,7 @@ private:
         _active->init(115200, initialPowerOn, 2, false);
     #if NM_EPD_420_BW
         _active->epd2.selectFastFullUpdate(EPD_FAST_FULL_UPDATE != 0);
-    #elif !NM_EPD_420_4C
+    #elif !NM_EPD_420_4C && !NM_EPD_075_3C
         _active->epd2.selectFastFullUpdate(_isUc8179 ? false : (EPD_FAST_FULL_UPDATE != 0));
     #endif
         _active->setRotation(0);
@@ -207,7 +224,12 @@ private:
 
     void _selectDriver() {
         gpio_hold_dis((gpio_num_t)PIN_EPD_RST);
-    #if NM_EPD_420_4C
+    #if NM_EPD_075_3C
+        _active = static_cast<EpdDisplay*>(&_panel75);
+        s_busyActiveLevel = LOW;
+        _autoValidated = true;
+        Serial.println("[EPDDetect] mode=3C_750c_Z08_GD7965");
+    #elif NM_EPD_420_4C
         _active = static_cast<EpdDisplay*>(&_fourColor);
         s_busyActiveLevel = LOW;
         _autoValidated = true;
@@ -236,7 +258,7 @@ private:
         Serial.flush();
     }
 
-#if !NM_EPD_420_BW && !NM_EPD_420_4C
+#if !NM_EPD_420_BW && !NM_EPD_420_4C && !NM_EPD_075_3C
     bool _detectIsUc8179() {
         pinMode(PIN_EPD_BUSY, INPUT_PULLUP);
         delay(2);
@@ -289,7 +311,7 @@ private:
             probe.run = true;
 #if NM_EPD_420_BW
             probe.activeLevel = HIGH;
-#elif NM_EPD_420_4C
+#elif NM_EPD_420_4C || NM_EPD_075_3C
             probe.activeLevel = LOW;
 #else
             probe.activeLevel = _isUc8179 ? LOW : HIGH;
@@ -330,6 +352,9 @@ private:
                   (unsigned long)probe.activeMs);
     #elif NM_EPD_420_4C
         Serial.printf("[EPDDetect] validate driver=4C_GDEY0420F51 activeMs=%lu level=LOW\n",
+                  (unsigned long)probe.activeMs);
+    #elif NM_EPD_075_3C
+        Serial.printf("[EPDDetect] validate driver=3C_750c_Z08 activeMs=%lu level=LOW\n",
                   (unsigned long)probe.activeMs);
     #else
         Serial.printf("[EPDDetect] validate driver=%s activeMs=%lu level=%s\n",
