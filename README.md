@@ -34,7 +34,7 @@ The NM-EPD-420 currently supports the tri-color GDEY042Z98 panel, the black-and-
 
 - **GYE042A87 black-and-white panel**:
   - **SKU: NM-EPD-420-BW**
-  - Full refresh (black / white) takes approximately 2-3 seconds, with partial refresh supported in approximately 1 second.
+  - Full refresh (black / white) takes approximately 2-3 seconds, with partial refresh supported in approximately 1 second (download [nm-epd420-bw-demo](https://github.com/RockBase-iot/nm-epd420-bw-demo) to try it).
   - The black-and-white panel is recommended for applications that need faster content updates.
   - The NM-EPD-420-BW version is suitable for fast-refresh applications and includes LoRa support by default, making it suitable for indoor desktop LoRa nodes.
 
@@ -57,11 +57,14 @@ The following projects have been ported to the NM-EPD-420. Clone the linked bran
 | Project | Description | Adapted repository / branch |
 |---------|-------------|-----------------------------|
 | **Meshtastic** | Off-grid LoRa mesh messaging; shows node info, messages, and sensor data on the 4.2" E-ink panel (HT-RA62 module, SX1262) | [RockBase-iot/meshtastic-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshtastic-firmware/tree/nm-epd-420) |
-| **TRMNL-Firmware** | TRMNL E-ink content framework; fetches images/content from a server on a schedule | [RockBase-iot/trmnl-firmware@`nm-epd-420`](https://github.com/RockBase-iot/trmnl-firmware/tree/nm-epd-420) |
+| **TRMNL-Firmware** | TRMNL E-ink content framework; fetches images/content from a server on a schedule | [RockBase-iot/trmnl-firmware](https://github.com/RockBase-iot/trmnl-firmware) |
 | **Biscuit** | Multi-purpose tool / entertainment firmware for E-ink devices | [RockBase-iot/biscuit@`master`](https://github.com/RockBase-iot/biscuit/tree/master) |
 | **ESP32-weather-epd** | Low-power weather station; fetches data from OpenWeatherMap and displays it on E-ink | [RockBase-iot/esp32-weather-epd@`main`](https://github.com/RockBase-iot/esp32-weather-epd/tree/main) |
 | **ESP32-Dashboard** | Multi-function E-ink dashboard: weather, air quality, indoor T/RH, Web config portal, etc. | [RockBase-iot/ESP32-Dashboard@`main`](https://github.com/RockBase-iot/ESP32-Dashboard/tree/main) |
-| **MeshCore** | Lightweight, low-power LoRa gateway firmware | [RockBase-iot/meshcore-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshcore-firmware/tree/nm-epd-420) |
+| **MeshCore** | Lightweight, low-power LoRa gateway firmware | [RockBase-iot/meshcore-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshcore/tree/nm-epd-420) |
+| **AgentDeck** | Displays your AI coding agent on a physical screen | [puritysb/AgentDeck](https://github.com/puritysb/AgentDeck) |
+| **nm-epd420-bw-demo** | NM-EPD420 black-and-white panel demo: partial refresh and fast refresh | [RockBase-iot/nm-epd420-bw-demo](https://github.com/RockBase-iot/nm-epd420-bw-demo) |
+| **Inkstone-firmware** | Local-push multi-color E-ink display framework | [RockBase-iot/Inkstone-firmware](https://github.com/RockBase-iot/Inkstone-firmware) |
 
 **Application firmware for the related projects is already available on [RockBase IoT Web Flash](https://flash.rockbaseiot.com).**
 
@@ -260,7 +263,7 @@ This board is essentially a fully-featured ESP32-S3 carrier. To start your own p
 
 ### 5.1 Common peripheral initialization notes
 
-* **E-paper**: Use the `zinggjm/GxEPD2` library with `GxEPD2_420c_GDEY042Z98` for the default tri-color NM-EPD-420 and `GxEPD2_420_GYE042A87` for NM-EPD-420-BW. Four-color HX8717 panels use `GxEPD2_420c_GDEY0420F51` through `nm-epd-420-4c`. CS=46, DC=4, RST=5, BUSY=6; the four-color driver uses active-low BUSY.
+* **E-paper**: Use the `zinggjm/GxEPD2` library with `GxEPD2_420c_GDEY042Z98` for the default tri-color NM-EPD-420 and `GxEPD2_420_GYE042A87` for NM-EPD-420-BW. The four-color panel can use `GxEPD2_420c_GDEY0420F51` with the `nm-epd-420-4c` environment. CS=46, DC=4, RST=5, BUSY=6; the four-color driver uses active-low BUSY.
 * **AHT20**: Use `Adafruit AHTX0`; I²C SDA=39, SCL=38; set `PIN_TEMP_CTL(40)` HIGH before reading.
 * **ES8311 / speaker / microphone**: I²C address 0x18, I²S pins as in the table above; drive `PIN_CODEC_EN(44)` and `PIN_PA_CTRL(41)` HIGH before playback.
 * **SD card**: Use the `SD` library + HSPI (SCK=9, MOSI=10, MISO=11, CS=7).
@@ -275,7 +278,7 @@ If you need to modify or extend the factory test firmware, the source is organiz
 src/
 ├── main.cpp              ← Arduino entry; disables task WDT, calls runner.run()
 ├── test_runner.{h,cpp}   ← T0/T11, button helpers, EPD pre-test resync, dispatch
-├── config.h              ← Pin map + feature switches (the single source of truth)
+├── config.h              ← Pin map + feature switches (first-hand reference for your own development)
 ├── spi_buses.h           ← Shared HSPI bus init for SD + LoRa
 ├── ui/
 │   └── display_helper.h  ← EPD wrapper + showWelcome / showTestScreen
@@ -341,3 +344,12 @@ The first batch of NM-EPD-420 units went on sale as scheduled in August 2026 and
 * [RockBase IoT Store](https://www.aliexpress.com/store/1105401362)
 * [RockBase Shop](https://rockbase.shop/products/nm-epd-420/)
 * [NMTech Global Store](https://www.aliexpress.com/store/1104265822)
+
+
+# Changelog
+
+## 2026-9-14
+
+- Added `NM-EPD-420-4C` four-color E-ink support test; released [Inkstone-firmware](https://github.com/RockBase-iot/Inkstone-firmware), supporting web preview and image push for multi-color devices;
+- Added 7.5-inch tri-color panel validation (GxEPD2_750c_Z08, GD7965 controller);
+- Added support for the [nm-epd420-bw-demo](https://github.com/RockBase-iot/nm-epd420-bw-demo) project, making it easy to test and verify partial refresh and fast refresh on the black-and-white `NM-EPD-420-BW`.

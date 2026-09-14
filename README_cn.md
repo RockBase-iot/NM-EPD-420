@@ -34,7 +34,7 @@ NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板
 
 - **GYE042A87 黑白墨水屏**：
   - **SKU： NM-EPD-420-BW**
-  - 全刷（黑/白）约 2-3 秒，支持局部刷新，局部刷新时间约 1 秒
+  - 全刷（黑/白）约 2-3 秒，支持局部刷新，局部刷新时间约 1 秒。（可下载[nm-epd420-bw-demo](https://github.com/RockBase-iot/nm-epd420-bw-demo)进行测试）
   - 对于需要快速刷新内容的应用，建议使用黑白墨水屏（GYE042A87）。
   - 因此，NM-EPD-420-BW 版本的开发板适合需要快速刷新内容的应用场景，默认NM-EPD-420-BW版本也默认支持了LoRa模块，更方面用户应用于室内的桌面端LoRa节点。
 
@@ -57,13 +57,16 @@ NM-EPD-420 把构建电子墨水屏项目所需的核心资源集成到一块板
 | 项目 | 简介 | 适配仓库/分支 |
 |------|------|---------------|
 | **Meshtastic** | 基于 LoRa 的离网 mesh 通信，可在 4.2" 墨水屏上显示节点信息、消息和传感器数据（HT-RA62模组，SX1262） | [RockBase-iot/meshtastic-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshtastic-firmware/tree/nm-epd-420) |
-| **TRMNL-Firmware** | TRMNL 电子墨水屏内容框架，支持定时从服务器拉取图片/内容并显示 | [RockBase-iot/trmnl-firmware@`nm-epd-420`](https://github.com/RockBase-iot/trmnl-firmware/tree/nm-epd-420) |
+| **TRMNL-Firmware** | TRMNL 电子墨水屏内容框架，支持定时从服务器拉取图片/内容并显示 | [RockBase-iot/trmnl-firmware](https://github.com/RockBase-iot/trmnl-firmware) |
 | **Biscuit** | 面向电子墨水屏设备的多功能工具/娱乐固件 | [RockBase-iot/biscuit@`master`](https://github.com/RockBase-iot/biscuit/tree/master) |
 | **ESP32-weather-epd** | 低功耗天气站，从 OpenWeatherMap 获取天气并在墨水屏展示 | [RockBase-iot/esp32-weather-epd@`main`](https://github.com/RockBase-iot/esp32-weather-epd/tree/main) |
 | **ESP32-Dashboard** | 多功能电子墨水屏 Dashboard：天气、空气质量、室内温湿度、Web 配网等 | [RockBase-iot/ESP32-Dashboard@`main`](https://github.com/RockBase-iot/ESP32-Dashboard/tree/main) |
-| **MeshCore** | 基于 LoRa 的轻量级低功耗网关固件 | [RockBase-iot/meshcore-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshcore-firmware/tree/nm-epd-420) |
+| **MeshCore** | 基于 LoRa 的轻量级低功耗网关固件 | [RockBase-iot/meshcore-firmware@`nm-epd-420`](https://github.com/RockBase-iot/meshcore/tree/nm-epd-420) |
+| **AgentDeck** | 将AI coding Agent展示到物理屏幕上 | [puritysb/AgentDeck](https://github.com/puritysb/AgentDeck) |
+| **nm-epd420-bw-demo** | NM-EPD420 黑白墨水屏演示项目，局部刷新、快速刷新演示 | [RockBase-iot/nm-epd420-bw-demo](https://github.com/RockBase-iot/nm-epd420-bw-demo) |
+| **Inkstone-firmware** | 本地推送多色墨水屏显示框架应用 | [RockBase-iot/Inkstone-firmware](https://github.com/RockBase-iot/Inkstone-firmware)|
 
-**相关项目应用代码已经可以在 [RockBase IoT Web Flash](https://flash.rockbaseiot.com) 获取。**
+**部分项目应用代码已经可以在 [RockBase IoT Web Flash](https://flash.rockbaseiot.com) 获取。**
 
 ![ESP32-Dashboard Application](image/esp-dashboard.png)
 
@@ -342,3 +345,12 @@ NM-EPD-420 第一批样机已经按照计划于 2026 年 8 月正式上架，目
 * [RockBase IoT Store](https://www.aliexpress.com/store/1105401362)
 * [RockBase Shop](https://rockbase.shop/products/nm-epd-420/)
 * [NMTech Global Store](https://www.aliexpress.com/store/1104265822)
+
+
+# 更新日志
+
+## 2026-9-14
+
+- 增加 `NM-EPD-420-4C` 4色墨水屏支持测试；推出[Inkstone-firmware](https://github.com/RockBase-iot/Inkstone-firmware)，支持多色设备网页预览、推送图片；
+- 增加7.5寸三色屏测试验证（GxEPD2_750c_Z08，控制器GD7965）；
+- 新增项目[nm-epd420-bw-demo](https://github.com/RockBase-iot/nm-epd420-bw-demo)支持，方便用户测试与验证黑白墨水屏`NM-EPD-420-BW`的局部刷新和快速刷新功能。
